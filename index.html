@@ -85,13 +85,24 @@
   .genres { color: var(--muted); font-size: 11px; margin-top: 2px; }
   .score { color: var(--good); font-weight: 600; }
 
-  .dismiss {
-    position: absolute; top: 7px; right: 7px; z-index: 3;
-    background: rgba(13,17,23,.85); border: 1px solid var(--border);
-    color: var(--muted); border-radius: 8px; padding: 3px 8px;
-    font-size: 10.5px; font-family: inherit; cursor: pointer; line-height: 1.4;
+  .card-actions {
+    position: absolute; top: 6px; left: 6px; right: 6px; z-index: 3;
+    display: flex; gap: 5px; justify-content: space-between;
   }
-  .dismiss:active { background: var(--accent); color: #14181f; }
+  .card-actions button {
+    background: rgba(13,17,23,.88); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 4px 7px;
+    font-size: 10.5px; font-family: inherit; cursor: pointer; line-height: 1.35;
+    backdrop-filter: blur(4px); font-weight: 600;
+  }
+  .card-actions .act-seen:active { background: var(--good); color: #0d1117; }
+  .card-actions .act-hide:active { background: var(--warn); color: #0d1117; }
+  .act-remove {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 7px; padding: 3px 8px; font-size: 11px;
+    font-family: inherit; cursor: pointer; margin-left: auto;
+  }
+  .act-remove:active { background: var(--warn); color: #0d1117; }
 
   .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
   .pill.soon { background: rgba(247,140,108,.14); color: var(--accent); }
@@ -359,11 +370,12 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
    Trois choses vivent dans le navigateur : les series ecartees, les notes,
    et les series ajoutees a la main (vues ailleurs que sur Crunchyroll).   */
 const KEYS = {
-  seen:   "anime_veille_seen",
-  rating: "anime_veille_ratings",
-  added:  "anime_veille_added",
-  cache:  "anime_veille_reco_cache",
-  top:    "anime_veille_top",
+  seen:    "anime_veille_seen",     // masquees des suggestions, hors liste
+  rating:  "anime_veille_ratings",
+  added:   "anime_veille_added",    // vues, ajoutees a la liste
+  removed: "anime_veille_removed",  // retirees de la liste (jamais vues, ou erreur)
+  cache:   "anime_veille_reco_cache",
+  top:     "anime_veille_top",
 };
 
 const read = (key, fallback) => {
@@ -374,10 +386,11 @@ const write = (key, value) => {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 };
 
-let SEEN    = new Set(read(KEYS.seen, []));
-let RATINGS = read(KEYS.rating, {});      // { anilistId: 1..5 }
-let ADDED   = read(KEYS.added, []);       // series ajoutees a la main
-let TOP     = read(KEYS.top, []);         // classement personnel, ordonne
+let HIDDEN  = new Set(read(KEYS.seen, []));    // « pas envie pour le moment »
+let RATINGS = read(KEYS.rating, {});           // { anilistId: 1..5 }
+let ADDED   = read(KEYS.added, []);            // vues ailleurs, entrees dans la liste
+let REMOVED = new Set(read(KEYS.removed, [])); // sorties de la liste
+let TOP     = read(KEYS.top, []);              // classement personnel, ordonne
 
 /* Confirmation visible : sans elle, rien ne dit que le tap a ete pris. */
 let toastTimer = null;
@@ -389,22 +402,64 @@ function toast(text = "Enregistré") {
   toastTimer = setTimeout(() => el.classList.remove("on"), 1100);
 }
 
-const CR_SEEN = new Set(PROFILE.series.map(s => s.anilist_id));
-const isSeen = id => CR_SEEN.has(id) || SEEN.has(id) || ADDED.some(a => a.id === id);
+const CR_IDS = new Set(PROFILE.series.map(s => s.anilist_id));
 
-/* La liste complete = historique Crunchyroll + ajouts manuels. */
+/* Ma liste = historique Crunchyroll + ajouts manuels, moins les retraits.
+   Trois etats bien distincts :
+     - dans la liste  : vue, notable
+     - masquee        : pas envie de la voir proposee, mais pas vue
+     - retiree        : sortie de la liste (ajout par erreur, ou jamais vue) */
 function myList() {
-  const fromCR = PROFILE.series.map(s => ({
-    id: s.anilist_id,
-    title: s.title_english || s.title_romaji,
-    cover: s.cover,
-    genres: s.genres || [],
-    episodes: s.watched_episodes,
-    last: s.last_watched,
-    source: "cr",
-  }));
-  const manual = ADDED.map(a => ({ ...a, source: "manuel" }));
+  const fromCR = PROFILE.series
+    .filter(s => !REMOVED.has(s.anilist_id))
+    .map(s => ({
+      id: s.anilist_id,
+      title: s.title_english || s.title_romaji,
+      cover: s.cover,
+      genres: s.genres || [],
+      episodes: s.watched_episodes,
+      last: s.last_watched,
+      source: "cr",
+    }));
+  const manual = ADDED
+    .filter(a => !REMOVED.has(a.id))
+    .map(a => ({ ...a, source: "manuel" }));
   return [...fromCR, ...manual];
+}
+
+const listIds = () => new Set(myList().map(s => s.id));
+const isInList = id => !REMOVED.has(id) && (CR_IDS.has(id) || ADDED.some(a => a.id === id));
+/* Ce qui ne doit plus etre propose : deja dans la liste, ou explicitement masque. */
+const isExcluded = id => isInList(id) || HIDDEN.has(id);
+
+/* Marquer une serie comme vue : elle entre dans la liste pour etre notee. */
+function addToList({ id, title, cover, genres }) {
+  REMOVED.delete(id);
+  write(KEYS.removed, [...REMOVED]);
+  HIDDEN.delete(id);
+  write(KEYS.seen, [...HIDDEN]);
+  if (!CR_IDS.has(id) && !ADDED.some(a => a.id === id)) {
+    ADDED.push({ id, title, cover, genres: genres || [], episodes: 0, last: new Date().toISOString() });
+    write(KEYS.added, ADDED);
+  }
+}
+
+/* Retirer de la liste : la serie disparait partout, notes et rang compris. */
+function removeFromList(id) {
+  REMOVED.add(id);
+  write(KEYS.removed, [...REMOVED]);
+  ADDED = ADDED.filter(a => a.id !== id);
+  write(KEYS.added, ADDED);
+  delete RATINGS[id];
+  write(KEYS.rating, RATINGS);
+  TOP = TOP.filter(x => x !== id);
+  write(KEYS.top, TOP);
+}
+
+/* Masquer sans entrer dans la liste : « pas celle-la, pas maintenant ». */
+function hideFromSuggestions(id) {
+  HIDDEN.add(id);
+  write(KEYS.seen, [...HIDDEN]);
 }
 
 /* ================= navigation ================= */
@@ -444,8 +499,16 @@ function dayLabel(ts) {
 
 const hour = ts => new Date(ts * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-function card({ url, cover, title, meta, genres, foot, dismissId }) {
+function card({ url, cover, title, meta, genres, foot, actionsFor }) {
+  // actionsFor : la serie proposee. Deux gestes distincts, « je l'ai vue »
+  // la fait entrer dans la liste pour etre notee, « pas envie » la masque.
+  const a = actionsFor;
+  const actions = a ? `<div class="card-actions">
+      <button class="act-seen" data-add='${esc(JSON.stringify({ id: a.id, title: a.title, cover: a.cover, genres: a.genres || [] }))}'>déjà vu</button>
+      <button class="act-hide" data-hide="${a.id}">pas envie</button>
+    </div>` : "";
   return `<div class="card-wrap">
+    ${actions}
     <a class="card" href="${esc(url || "#")}" target="_blank" rel="noopener">
       <img src="${esc(cover || "")}" alt="" loading="lazy">
       <div class="body">
@@ -455,7 +518,6 @@ function card({ url, cover, title, meta, genres, foot, dismissId }) {
         ${foot ? `<div class="foot">${foot}</div>` : ""}
       </div>
     </a>
-    ${dismissId ? `<button class="dismiss" data-seen="${dismissId}">déjà vu</button>` : ""}
   </div>`;
 }
 
@@ -577,7 +639,7 @@ async function computeRecos({ force = false } = {}) {
       if (!node) return;
       for (const rec of node.recommendations.nodes) {
         const m = rec.mediaRecommendation;
-        if (!m || isSeen(m.id) || SEEN.has(m.id)) continue;
+        if (!m || isExcluded(m.id)) continue;
         if (["MUSIC", "SPECIAL"].includes(m.format)) continue;
 
         const rating = Math.max(rec.rating || 0, 0) + 1;
@@ -676,7 +738,7 @@ function renderSuites() {
   const rows = [];
   for (const s of PROFILE.series) {
     for (const q of (s.sequels || [])) {
-      if (CR_SEEN.has(q.id)) continue;
+      if (isInList(q.id)) continue;
       if (!["NOT_YET_RELEASED", "RELEASING"].includes(q.status)) continue;
       rows.push({ parent: s, q });
     }
@@ -696,7 +758,7 @@ function renderSuites() {
 }
 
 function renderPourToi(items, meta) {
-  const list = (items || []).filter(r => !SEEN.has(r.id));
+  const list = (items || []).filter(r => !isExcluded(r.id));
   const rated = meta?.ratedCount ?? Object.keys(RATINGS).length;
   $("reco-info").textContent = rated
     ? `Calculé sur ${rated} série${rated > 1 ? "s" : ""} notée${rated > 1 ? "s" : ""}.`
@@ -709,7 +771,7 @@ function renderPourToi(items, meta) {
     meta: `Car tu as aimé ${esc(r.because)}`,
     genres: [(r.genres || []).slice(0, 2).join(" · "), r.year].filter(Boolean).join(" · "),
     foot: `${r.score ? `<span class="score">${r.score}%</span> ` : ""}<span class="pill">${r.episodes || "?"} ép.</span>`,
-    dismissId: r.id
+    actionsFor: r
   })).join("") + `</div>`;
 }
 
@@ -723,7 +785,7 @@ function renderSaison(list) {
     for (const g of (s.genres || [])) taste[g] = (taste[g] || 0) + boost;
   }
   const scored = source
-    .filter(m => !isSeen(m.id) && !SEEN.has(m.id))
+    .filter(m => !isExcluded(m.id))
     .map(m => ({ m, fit: (m.genres || []).reduce((a, g) => a + (taste[g] || 0), 0) }))
     .sort((a, b) => b.fit - a.fit || (b.m.averageScore || 0) - (a.m.averageScore || 0));
   if (!scored.length) return empty("Rien de nouveau trouvé pour cette saison.");
@@ -733,7 +795,7 @@ function renderSaison(list) {
     title: m.title.english || m.title.romaji,
     meta: (m.genres || []).slice(0, 3).join(" · "),
     foot: `${m.averageScore ? `<span class="score">${m.averageScore}%</span> ` : ""}${fit > 0 ? `<span class="pill soon">Dans tes goûts</span>` : ""}`,
-    dismissId: m.id
+    actionsFor: { id: m.id, title: m.title.english || m.title.romaji, cover: m.coverImage?.large, genres: m.genres }
   })).join("") + `</div>`;
 }
 
@@ -760,7 +822,10 @@ function renderMaListe() {
         <div class="meta">${s.source === "cr"
           ? `${s.episodes} épisode${s.episodes > 1 ? "s" : ""} vus`
           : `Ajoutée à la main`}</div>
-        <div class="foot">${starsHtml(s.id)}</div>
+        <div class="row-foot">
+          ${starsHtml(s.id)}
+          <button class="act-remove" data-remove="${s.id}">retirer</button>
+        </div>
       </div>
     </div>
   </div>`).join("") + `</div>`;
@@ -853,12 +918,32 @@ $("montop").addEventListener("click", e => {
 
 /* ================= interactions ================= */
 document.addEventListener("click", e => {
-  const dis = e.target.closest(".dismiss");
-  if (dis) {
+  const seenBtn = e.target.closest(".act-seen");
+  if (seenBtn) {
     e.preventDefault(); e.stopPropagation();
-    SEEN.add(Number(dis.dataset.seen));
-    write(KEYS.seen, [...SEEN]);
-    dis.closest(".card-wrap").remove();
+    try { addToList(JSON.parse(seenBtn.dataset.add)); } catch { return; }
+    seenBtn.closest(".card-wrap").remove();
+    $("maliste").innerHTML = renderMaListe();
+    toast("Ajoutée à ta liste, tu peux la noter");
+    scheduleTasteRefresh();
+    return;
+  }
+  const hideBtn = e.target.closest(".act-hide");
+  if (hideBtn) {
+    e.preventDefault(); e.stopPropagation();
+    hideFromSuggestions(Number(hideBtn.dataset.hide));
+    hideBtn.closest(".card-wrap").remove();
+    toast("Masquée");
+    return;
+  }
+  const rmBtn = e.target.closest(".act-remove");
+  if (rmBtn) {
+    e.preventDefault(); e.stopPropagation();
+    removeFromList(Number(rmBtn.dataset.remove));
+    $("maliste").innerHTML = renderMaListe();
+    $("montop").innerHTML = renderTop();
+    toast("Retirée de ta liste");
+    scheduleTasteRefresh();
     return;
   }
   const star = e.target.closest(".stars button");
@@ -917,7 +1002,7 @@ $("search").addEventListener("input", e => {
       const found = d.Page.media;
       if (!found.length) { $("search-results").innerHTML = empty("Aucun résultat."); return; }
       $("search-results").innerHTML = `<div class="list-grid">` + found.map(m => {
-        const already = isSeen(m.id);
+        const already = isInList(m.id);
         return `<div class="card-wrap list-row">
           <div class="card">
             <img src="${esc(m.coverImage?.large || "")}" alt="" loading="lazy">
@@ -942,28 +1027,28 @@ $("search").addEventListener("input", e => {
 });
 
 $("search-results").addEventListener("click", e => {
-  const btn = e.target.closest("[data-add]");
+  const btn = e.target.closest(".add-btn");
   if (!btn) return;
-  ADDED.push({
+  e.preventDefault(); e.stopPropagation();
+  addToList({
     id: Number(btn.dataset.add),
     title: btn.dataset.title,
     cover: btn.dataset.cover,
     genres: btn.dataset.genres ? btn.dataset.genres.split("|") : [],
-    episodes: 0,
-    last: new Date().toISOString(),
   });
-  write(KEYS.added, ADDED);
   btn.textContent = "ajoutée";
   btn.classList.add("done");
   btn.disabled = true;
   $("maliste").innerHTML = renderMaListe();
+  toast("Ajoutée à ta liste");
+  scheduleTasteRefresh();
 });
 
 /* surcouche de calibrage */
 function renderCalibGrid() {
   $("calib-grid").innerHTML = POPULAR.map(p => {
-    const locked = CR_SEEN.has(p.id);
-    const picked = SEEN.has(p.id);
+    const locked = CR_IDS.has(p.id) && !REMOVED.has(p.id);
+    const picked = isInList(p.id);
     return `<div class="poster ${locked ? "locked" : (picked ? "picked" : "")}" data-pid="${locked ? "" : p.id}">
       <img src="${esc(p.cover)}" alt="" loading="lazy">
       <div class="cap">${esc(p.title)}</div>
@@ -977,23 +1062,33 @@ $("calib-done").onclick = async () => {
   $("pourtoi").innerHTML = renderPourToi(items, { ratedCount });
   $("saison").innerHTML = renderSaison(null);
 };
-$("calib-reset").onclick = () => { SEEN = new Set(); write(KEYS.seen, []); renderCalibGrid(); };
+$("calib-reset").onclick = () => {
+  // Ne retire que ce qui a ete coche ici, jamais l'historique Crunchyroll.
+  for (const p of POPULAR) if (!CR_IDS.has(p.id) && isInList(p.id)) removeFromList(p.id);
+  renderCalibGrid();
+  $("maliste").innerHTML = renderMaListe();
+  toast("Sélection vidée");
+};
 $("calib-grid").addEventListener("click", e => {
   const cell = e.target.closest(".poster");
   if (!cell || !cell.dataset.pid) return;
   const id = Number(cell.dataset.pid);
-  if (SEEN.has(id)) SEEN.delete(id); else SEEN.add(id);
-  write(KEYS.seen, [...SEEN]);
-  cell.classList.toggle("picked", SEEN.has(id));
+  const entry = POPULAR.find(p => p.id === id);
+  // Cocher ici vaut « je l'ai vue » : la serie entre dans la liste et devient
+  // notable, au lieu d'etre seulement ecartee des suggestions.
+  if (isInList(id)) removeFromList(id); else addToList(entry);
+  cell.classList.toggle("picked", isInList(id));
 });
 
 /* sauvegarde et restauration des notes */
 $("open-backup").onclick = () => {
   $("backup-text").value = JSON.stringify({
-    v: 1,
+    v: 2,
     ratings: RATINGS,
     added: ADDED,
-    seen: [...SEEN],
+    hidden: [...HIDDEN],
+    removed: [...REMOVED],
+    top: TOP,
   }, null, 2);
   $("backup-msg").innerHTML = "";
   $("backup").classList.add("on");
@@ -1015,12 +1110,18 @@ $("backup-restore").onclick = () => {
     if (!data || typeof data !== "object") throw new Error("format inattendu");
     RATINGS = data.ratings || {};
     ADDED   = Array.isArray(data.added) ? data.added : [];
-    SEEN    = new Set(Array.isArray(data.seen) ? data.seen : []);
+    // v1 nommait « seen » ce qui est aujourd'hui « hidden ».
+    HIDDEN  = new Set(Array.isArray(data.hidden) ? data.hidden : (data.seen || []));
+    REMOVED = new Set(Array.isArray(data.removed) ? data.removed : []);
+    TOP     = Array.isArray(data.top) ? data.top : [];
     write(KEYS.rating, RATINGS);
     write(KEYS.added, ADDED);
-    write(KEYS.seen, [...SEEN]);
+    write(KEYS.seen, [...HIDDEN]);
+    write(KEYS.removed, [...REMOVED]);
+    write(KEYS.top, TOP);
     localStorage.removeItem(KEYS.cache);
     $("maliste").innerHTML = renderMaListe();
+    $("montop").innerHTML = renderTop();
     $("saison").innerHTML = renderSaison(null);
     $("backup-msg").innerHTML =
       `<div class="pill ok" style="margin-top:8px">Restauré : ${Object.keys(RATINGS).length} notes</div>`;
