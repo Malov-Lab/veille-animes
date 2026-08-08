@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="robots" content="noindex, nofollow">
+<title>Ma veille animés</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface-2: #1c2330; --border: #262d38;
+    --text: #e6edf3; --muted: #8b949e; --accent: #f78c6c; --accent-2: #7aa2f7;
+    --good: #7ee787; --warn: #f2cc60; --star: #ffc857; --radius: 14px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: 92px; overflow-x: hidden;
+  }
+
+  header {
+    padding: 18px 16px 11px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #131922, var(--bg));
+    padding-top: max(18px, env(safe-area-inset-top));
+  }
+  h1 { margin: 0; font-size: 19px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-top: 5px; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 5px; vertical-align: 1px; }
+
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+    display: flex; background: rgba(13,17,23,.94); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: 0; color: var(--muted); position: relative;
+    padding: 10px 1px 12px; font-size: 9.5px; font-family: inherit;
+    cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  nav button .ico { font-size: 16px; line-height: 1; }
+  nav button.on { color: var(--accent); }
+  nav button .badge {
+    position: absolute; top: 4px; left: 50%; margin-left: 4px;
+    background: var(--accent); color: #14181f; font-size: 9px; font-weight: 700;
+    border-radius: 9px; padding: 0 4px; min-width: 14px; line-height: 14px;
+  }
+
+  main { padding: 16px 14px; max-width: 820px; margin: 0 auto; }
+  section { display: none; }
+  section.on { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2 { font-size: 15px; margin: 0 0 3px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+
+  /* Deux colonnes des le mobile : une carte par ligne obligeait a scroller
+     pour rien. Le poster passe en haut, le texte dessous.                 */
+  .grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px;
+  }
+  .card-wrap { position: relative; min-width: 0; }
+  .card {
+    display: flex; flex-direction: column; height: 100%;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    text-decoration: none; color: inherit; transition: border-color .15s;
+  }
+  .card:active { border-color: var(--accent); }
+  .card img {
+    width: 100%; aspect-ratio: 2 / 3; object-fit: cover;
+    display: block; background: var(--surface-2);
+  }
+  .card .body { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 9px 9px; }
+  .card .title {
+    font-weight: 600; font-size: 13px; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card .meta {
+    color: var(--muted); font-size: 11.5px; margin-top: 3px; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card .foot { margin-top: auto; padding-top: 7px; font-size: 12px; }
+  .genres { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .score { color: var(--good); font-weight: 600; }
+
+  .dismiss {
+    position: absolute; top: 7px; right: 7px; z-index: 3;
+    background: rgba(13,17,23,.85); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px; padding: 3px 8px;
+    font-size: 10.5px; font-family: inherit; cursor: pointer; line-height: 1.4;
+  }
+  .dismiss:active { background: var(--accent); color: #14181f; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+  .pill.soon { background: rgba(247,140,108,.14); color: var(--accent); }
+  .pill.today { background: rgba(247,140,108,.2); color: var(--accent); }
+  .pill.late { background: rgba(242,204,96,.14); color: var(--warn); }
+  .pill.new { background: rgba(122,162,247,.14); color: var(--accent-2); }
+  .pill.ok { background: rgba(126,231,135,.13); color: var(--good); }
+
+  .day-head { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 18px 0 8px; font-weight: 700; }
+  .day-head:first-child { margin-top: 0; }
+
+  .empty { text-align: center; color: var(--muted); padding: 38px 20px; border: 1px dashed var(--border); border-radius: var(--radius); font-size: 13.5px; }
+  .loading { text-align: center; color: var(--muted); padding: 30px; font-size: 13px; }
+  .err { background: rgba(242,204,96,.08); border: 1px solid rgba(242,204,96,.3); color: var(--warn); padding: 11px 13px; border-radius: 10px; font-size: 12.5px; margin-bottom: 12px; }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 13px; flex-wrap: wrap; }
+  .btn {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 8px 13px; font-size: 12.5px; font-family: inherit;
+    cursor: pointer; font-weight: 600;
+  }
+  .btn.primary { background: var(--accent); color: #14181f; border-color: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn:active { opacity: .8; }
+  .counter { color: var(--muted); font-size: 12px; }
+
+  /* --- etoiles --- */
+  .stars { display: inline-flex; gap: 1px; }
+  .stars button {
+    background: none; border: 0; padding: 3px 2px; cursor: pointer;
+    font-size: 16px; line-height: 1; color: #39414f;
+  }
+  .stars button.lit { color: var(--star); }
+  .rated-note { color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+
+  /* --- recherche --- */
+  .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-row input {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 10px 12px;
+    font-size: 14px; font-family: inherit; min-width: 0;
+  }
+  .search-row input:focus { outline: none; border-color: var(--accent); }
+  .add-btn {
+    background: var(--accent); color: #14181f; border: 0; border-radius: 9px;
+    padding: 5px 11px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .add-btn.done { background: var(--good); }
+
+  /* --- surcouche --- */
+  .overlay { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: none; flex-direction: column; }
+  .overlay.on { display: flex; }
+  .overlay-head { padding: 16px 14px 12px; border-bottom: 1px solid var(--border); padding-top: max(16px, env(safe-area-inset-top)); }
+  .overlay-head h2 { font-size: 16px; margin: 0 0 4px; }
+  .overlay-head p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  .overlay-body { flex: 1; overflow-y: auto; padding: 12px 10px 16px; -webkit-overflow-scrolling: touch; }
+  .overlay-foot {
+    padding: 12px 14px; border-top: 1px solid var(--border); display: flex; gap: 10px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)); background: var(--surface);
+  }
+  .overlay-foot .btn { flex: 1; }
+
+  .poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 9px; }
+  .poster { position: relative; cursor: pointer; border-radius: 9px; overflow: hidden; border: 2px solid transparent; background: var(--surface-2); }
+  .poster img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+  .poster .cap { font-size: 10px; line-height: 1.25; padding: 4px 5px 6px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .poster.picked { border-color: var(--good); }
+  .poster.picked img { opacity: .38; }
+  .poster.picked::after { content: "✓"; position: absolute; top: 5px; right: 5px; background: var(--good); color: #0d1117; font-weight: 800; font-size: 12px; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; }
+  .poster.locked { border-color: var(--accent-2); cursor: default; }
+  .poster.locked img { opacity: .3; }
+  .poster.locked::after { content: "CR"; position: absolute; top: 5px; right: 5px; background: var(--accent-2); color: #0d1117; font-weight: 800; font-size: 9px; padding: 2px 5px; border-radius: 6px; }
+
+  /* Ma liste : les etoiles doivent rester tapables, la carte reste horizontale. */
+  .list-grid { display: grid; grid-template-columns: 1fr; gap: 9px; }
+  @media (min-width: 620px) { .list-grid { grid-template-columns: 1fr 1fr; } }
+  .list-row .card { flex-direction: row; gap: 10px; padding: 9px; }
+  .list-row .card img { width: 50px; aspect-ratio: 2/3; border-radius: 8px; flex-shrink: 0; }
+  .list-row .card .body { padding: 0; }
+  .list-row .card .title { -webkit-line-clamp: 2; font-size: 13.5px; }
+
+  @media (min-width: 560px) {
+    .grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 11px; }
+    .card .title { font-size: 13.5px; }
+  }
+  @media (min-width: 900px) {
+    .grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ma veille animés</h1>
+  <div class="sub"><span class="dot"></span><span id="status">Connexion à AniList…</span></div>
+</header>
+
+<main>
+  <section id="tab-semaine" class="on">
+    <h2>Cette semaine</h2>
+    <p class="hint">Les prochains épisodes des séries que tu suis.</p>
+    <div id="semaine"><div class="loading">Chargement…</div></div>
+  </section>
+
+  <section id="tab-retard">
+    <h2>Ton retard</h2>
+    <p class="hint">Des épisodes sont sortis depuis ton dernier visionnage.</p>
+    <div id="retard"><div class="loading">Chargement…</div></div>
+  </section>
+
+  <section id="tab-suites">
+    <h2>Suites à venir</h2>
+    <p class="hint">Les séries que tu as vues dont une suite est annoncée ou en cours.</p>
+    <div id="suites"><div class="loading">Chargement…</div></div>
+  </section>
+
+  <section id="tab-pourtoi">
+    <h2>Pour toi</h2>
+    <p class="hint">Calculé sur tes notes. Plus tu notes, plus c'est juste.</p>
+    <div class="toolbar">
+      <button class="btn primary" id="recalc">Recalculer d'après mes notes</button>
+      <button class="btn" id="open-calib">Déjà vu ailleurs</button>
+    </div>
+    <div class="counter" id="reco-info" style="margin-bottom:12px"></div>
+    <div id="pourtoi"><div class="loading">Chargement…</div></div>
+  </section>
+
+  <section id="tab-saison">
+    <h2>Cette saison</h2>
+    <p class="hint">Les nouveautés du moment, triées par proximité avec tes goûts.</p>
+    <div id="saison"><div class="loading">Chargement…</div></div>
+  </section>
+
+  <section id="tab-maliste">
+    <h2>Ma liste</h2>
+    <p class="hint">Note ce que tu as aimé. Une quinzaine de notes suffit à changer les suggestions.</p>
+    <div class="search-row">
+      <input id="search" type="search" placeholder="Ajouter une série vue ailleurs…" autocomplete="off">
+    </div>
+    <div id="search-results"></div>
+    <div class="toolbar">
+      <button class="btn" id="open-backup">Sauvegarder / restaurer mes notes</button>
+    </div>
+    <div class="counter" id="list-info" style="margin:4px 0 12px"></div>
+    <div id="maliste"></div>
+  </section>
+</main>
+
+<div class="overlay" id="backup">
+  <div class="overlay-head">
+    <h2>Sauvegarde de tes notes</h2>
+    <p>Tes notes vivent dans ce navigateur. Copie ce texte quelque part pour les
+       retrouver sur un autre appareil, ou après un vidage de cache.</p>
+  </div>
+  <div class="overlay-body">
+    <textarea id="backup-text" spellcheck="false"
+      style="width:100%;min-height:220px;background:var(--surface);color:var(--text);
+             border:1px solid var(--border);border-radius:10px;padding:11px;
+             font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;resize:vertical"></textarea>
+    <p class="hint" style="margin-top:10px">
+      Pour restaurer : colle ici une sauvegarde puis touche « Restaurer ».
+      Ça remplace tes notes actuelles.
+    </p>
+    <div id="backup-msg"></div>
+  </div>
+  <div class="overlay-foot">
+    <button class="btn" id="backup-copy">Copier</button>
+    <button class="btn" id="backup-restore">Restaurer</button>
+    <button class="btn primary" id="backup-close">Fermer</button>
+  </div>
+</div>
+
+<div class="overlay" id="calib">
+  <div class="overlay-head">
+    <h2>Ce que tu as déjà vu</h2>
+    <p>Touche les séries que tu connais déjà, elles ne te seront plus proposées.
+       Celles marquées <strong>CR</strong> viennent de ton historique Crunchyroll.</p>
+  </div>
+  <div class="overlay-body"><div class="poster-grid" id="calib-grid"></div></div>
+  <div class="overlay-foot">
+    <button class="btn" id="calib-reset">Tout décocher</button>
+    <button class="btn primary" id="calib-done">Terminé</button>
+  </div>
+</div>
+
+<nav>
+  <button data-tab="semaine" class="on"><span class="ico">📅</span>Semaine<span class="badge" id="b-semaine" hidden></span></button>
+  <button data-tab="retard"><span class="ico">⏳</span>Retard<span class="badge" id="b-retard" hidden></span></button>
+  <button data-tab="suites"><span class="ico">🔜</span>Suites<span class="badge" id="b-suites" hidden></span></button>
+  <button data-tab="pourtoi"><span class="ico">✨</span>Pour toi</button>
+  <button data-tab="saison"><span class="ico">🍂</span>Saison</button>
+  <button data-tab="maliste"><span class="ico">⭐</span>Ma liste</button>
+</nav>
+
+<script>
+const PROFILE = {"generated_at": "2026-08-08T19:07:05Z", "series": [{"anilist_id": 21, "title_romaji": "ONE PIECE", "title_english": "ONE PIECE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21-ELSYx3yMPcKM.jpg", "genres": ["Action", "Adventure", "Comedy", "Drama", "Fantasy"], "max_episode_seen": 1172.0, "watched_episodes": 361, "last_watched": "2026-08-08T16:41:44Z", "sequels": [{"relation": "SIDE_STORY", "id": 466, "title": "One Piece: Defeat the Pirate Ganzack!", "status": "FINISHED", "format": "OVA", "season": "SUMMER", "year": 1998, "url": "https://anilist.co/anime/466"}, {"relation": "SIDE_STORY", "id": 1094, "title": "One Piece: Umi no Heso no Daibouken-hen", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2000, "url": "https://anilist.co/anime/1094"}, {"relation": "SIDE_STORY", "id": 1237, "title": "One Piece Special: Open Upon the Great Sea! A Father's Huge, HUGE Dream!", "status": "FINISHED", "format": "SPECIAL", "season": "SPRING", "year": 2003, "url": "https://anilist.co/anime/1237"}, {"relation": "SIDE_STORY", "id": 1238, "title": "One Piece Special: Protect! The Last Great Performance", "status": "FINISHED", "format": "SPECIAL", "season": "WINTER", "year": 2003, "url": "https://anilist.co/anime/1238"}, {"relation": "SIDE_STORY", "id": 2020, "title": "One Piece Special: The Detective Memoirs of Chief Straw Hat Luffy", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2005, "url": "https://anilist.co/anime/2020"}, {"relation": "SIDE_STORY", "id": 2386, "title": "ONE PIECE: Yume no Soccer Ou!", "status": "FINISHED", "format": "SPECIAL", "season": "SPRING", "year": 2002, "url": "https://anilist.co/anime/2386"}, {"relation": "SIDE_STORY", "id": 2490, "title": "ONE PIECE: Mezase! Kaizoku Yakyuu Ou", "status": "FINISHED", "format": "SPECIAL", "season": "SPRING", "year": 2004, "url": "https://anilist.co/anime/2490"}, {"relation": "SIDE_STORY", "id": 12001, "title": "ONE PIECE 3D: Gekisou! Trap Coaster", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2011, "url": "https://anilist.co/anime/12001"}, {"relation": "SIDE_STORY", "id": 16239, "title": "One Piece: Episode of Luffy - Hand Island Adventure", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2012, "url": "https://anilist.co/anime/16239"}, {"relation": "SIDE_STORY", "id": 16468, "title": "ONE PIECE FILM: Z - GLORIOUS ISLAND", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2012, "url": "https://anilist.co/anime/16468"}, {"relation": "SIDE_STORY", "id": 20835, "title": "One Piece 3D2Y: Overcome Ace’s Death! Luffy’s Vow to his Friends", "status": "FINISHED", "format": "SPECIAL", "season": "SUMMER", "year": 2014, "url": "https://anilist.co/anime/20835"}, {"relation": "SIDE_STORY", "id": 21485, "title": "One Piece: Adventure of Nebulandia", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2015, "url": "https://anilist.co/anime/21485"}, {"relation": "SIDE_STORY", "id": 21831, "title": "One Piece: Heart of Gold", "status": "FINISHED", "format": "SPECIAL", "season": "SUMMER", "year": 2016, "url": "https://anilist.co/anime/21831"}, {"relation": "SIDE_STORY", "id": 459, "title": "ONE PIECE: The Movie", "status": "FINISHED", "format": "MOVIE", "season": "WINTER", "year": 2000, "url": "https://anilist.co/anime/459"}, {"relation": "SIDE_STORY", "id": 460, "title": "One Piece: Clockwork Island Adventure", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2001, "url": "https://anilist.co/anime/460"}, {"relation": "SIDE_STORY", "id": 461, "title": "One Piece: Chopper’s Kingdom on the Island of Strange Animals", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2002, "url": "https://anilist.co/anime/461"}, {"relation": "SIDE_STORY", "id": 462, "title": "One Piece The Movie: The Dead End Adventure", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2003, "url": "https://anilist.co/anime/462"}, {"relation": "SIDE_STORY", "id": 463, "title": "One Piece: The Curse of the Sacred Sword", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2004, "url": "https://anilist.co/anime/463"}, {"relation": "SIDE_STORY", "id": 464, "title": "One Piece: Baron Omatsuri and the Secret Island", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2005, "url": "https://anilist.co/anime/464"}, {"relation": "SIDE_STORY", "id": 465, "title": "One Piece: Mega Mecha Soldier of Karakuri Castle", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2006, "url": "https://anilist.co/anime/465"}, {"relation": "SIDE_STORY", "id": 4155, "title": "One Piece Film: Strong World", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2009, "url": "https://anilist.co/anime/4155"}, {"relation": "SIDE_STORY", "id": 9999, "title": "One Piece 3D: Mugiwara Chase", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2011, "url": "https://anilist.co/anime/9999"}, {"relation": "SIDE_STORY", "id": 12859, "title": "One Piece Film: Z", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2012, "url": "https://anilist.co/anime/12859"}, {"relation": "SIDE_STORY", "id": 21335, "title": "One Piece Film: Gold", "status": "FINISHED", "format": "MOVIE", "season": "SUMMER", "year": 2016, "url": "https://anilist.co/anime/21335"}, {"relation": "SIDE_STORY", "id": 8740, "title": "ONE PIECE FILM: STRONG WORLD - EPISODE:0", "status": "FINISHED", "format": "OVA", "season": "SPRING", "year": 2010, "url": "https://anilist.co/anime/8740"}, {"relation": "SIDE_STORY", "id": 105143, "title": "One Piece: Stampede", "status": "FINISHED", "format": "MOVIE", "season": "SUMMER", "year": 2019, "url": "https://anilist.co/anime/105143"}, {"relation": "SIDE_STORY", "id": 2385, "title": "One Piece: Django's Dance Carnival", "status": "FINISHED", "format": "SPECIAL", "season": "SPRING", "year": 2001, "url": "https://anilist.co/anime/2385"}, {"relation": "SIDE_STORY", "id": 21880, "title": "ONE PIECE FILM: GOLD - episode 0 711ver.", "status": "FINISHED", "format": "SPECIAL", "season": "SUMMER", "year": 2016, "url": "https://anilist.co/anime/21880"}, {"relation": "ALTERNATIVE", "id": 5252, "title": "One Piece: Romance Dawn Story", "status": "FINISHED", "format": "OVA", "season": "FALL", "year": 2008, "url": "https://anilist.co/anime/5252"}, {"relation": "SIDE_STORY", "id": 126649, "title": "The Great Tongari Island Treasure Hunting Adventure", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2016, "url": "https://anilist.co/anime/126649"}, {"relation": "SIDE_STORY", "id": 141902, "title": "One Piece Film: Red", "status": "FINISHED", "format": "MOVIE", "season": "SUMMER", "year": 2022, "url": "https://anilist.co/anime/141902"}, {"relation": "ALTERNATIVE", "id": 171630, "title": "THE ONE PIECE", "status": "NOT_YET_RELEASED", "format": null, "season": "WINTER", "year": 2027, "url": "https://anilist.co/anime/171630"}, {"relation": "SIDE_STORY", "id": 182469, "title": "ONE PIECE FAN LETTER", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2024, "url": "https://anilist.co/anime/182469"}, {"relation": "SIDE_STORY", "id": 188668, "title": "Koisuru ONE PIECE", "status": "FINISHED", "format": "ONA", "season": "SPRING", "year": 2025, "url": "https://anilist.co/anime/188668"}, {"relation": "SIDE_STORY", "id": 197178, "title": "ONE PIECE HEROINES", "status": "FINISHED", "format": "SPECIAL", "season": "SUMMER", "year": 2026, "url": "https://anilist.co/anime/197178"}, {"relation": "SIDE_STORY", "id": 187380, "title": "ONE PIECE: Original Episode/Luffy, Law", "status": "FINISHED", "format": "SPECIAL", "season": "WINTER", "year": 2025, "url": "https://anilist.co/anime/187380"}]}, {"anilist_id": 187538, "title_romaji": "BLACK TORCH", "title_english": "BLACK TORCH", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx187538-fXVXKYUA3VV6.jpg", "genres": ["Action", "Adventure", "Fantasy", "Sci-Fi", "Supernatural"], "max_episode_seen": 6.0, "watched_episodes": 6, "last_watched": "2026-08-08T16:40:20Z", "sequels": []}, {"anilist_id": 115230, "title_romaji": "Kami no Tou: Tower of God", "title_english": "Tower of God", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx115230-QHOdSN7yt8ab.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Mystery"], "max_episode_seen": 26.0, "watched_episodes": 65, "last_watched": "2026-08-08T15:04:54Z", "sequels": [{"relation": "SEQUEL", "id": 153406, "title": "Tower of God Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2024, "url": "https://anilist.co/anime/153406"}]}, {"anilist_id": 137667, "title_romaji": "Guimi Zhi Zhu: Xiaochou Pian", "title_english": "Lord of Mysteries", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx137667-xQxzQRAerw53.jpg", "genres": ["Action", "Drama", "Fantasy", "Mystery", "Supernatural", "Thriller"], "max_episode_seen": 13.0, "watched_episodes": 29, "last_watched": "2026-08-03T17:13:10Z", "sequels": [{"relation": "SIDE_STORY", "id": 199448, "title": "Lord of Mysteries Specials", "status": "FINISHED", "format": "ONA", "season": null, "year": 2026, "url": "https://anilist.co/anime/199448"}, {"relation": "SEQUEL", "id": 206874, "title": "Guimi Zhi Zhu: Wu Mian Ren Pian", "status": "NOT_YET_RELEASED", "format": "ONA", "season": null, "year": 2027, "url": "https://anilist.co/anime/206874"}, {"relation": "SIDE_STORY", "id": 206875, "title": "Lord of Mysteries: Chibi Theatre", "status": "FINISHED", "format": "ONA", "season": null, "year": 2025, "url": "https://anilist.co/anime/206875"}]}, {"anilist_id": 151807, "title_romaji": "Ore dake Level Up na Ken", "title_english": "Solo Leveling", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx151807-it355ZgzquUd.png", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 25.0, "watched_episodes": 42, "last_watched": "2026-08-01T21:32:44Z", "sequels": [{"relation": "SEQUEL", "id": 176496, "title": "Solo Leveling Season 2 -Arise from the Shadow-", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2025, "url": "https://anilist.co/anime/176496"}]}, {"anilist_id": 116006, "title_romaji": "THE GOD OF HIGH SCHOOL", "title_english": "The God of High School", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx116006-Wt8JSA1ZQxlM.png", "genres": ["Action", "Fantasy"], "max_episode_seen": 13.0, "watched_episodes": 15, "last_watched": "2026-07-23T07:36:44Z", "sequels": []}, {"anilist_id": 187264, "title_romaji": "Yuusha Party wo Oidasareta Kiyou Binbou", "title_english": "Jack-of-All-Trades, Party of None", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx187264-wjwbVdnynbbu.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2026-07-17T18:36:00Z", "sequels": [{"relation": "SEQUEL", "id": 209670, "title": "Yuusha Party wo Oidasareta Kiyou Binbou 2nd Season", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/209670"}]}, {"anilist_id": 178869, "title_romaji": "Clevatess: Majuu no Ou to Akago to Kabane no Yuusha", "title_english": "Clevatess", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178869-qiEz0gQD8H5N.png", "genres": ["Action", "Drama", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 15, "last_watched": "2026-07-17T07:27:52Z", "sequels": [{"relation": "SEQUEL", "id": 198946, "title": "Clevatess Season 2", "status": "RELEASING", "format": "TV", "season": "SUMMER", "year": 2026, "url": "https://anilist.co/anime/198946"}]}, {"anilist_id": 33, "title_romaji": "Kenpuu Denki Berserk", "title_english": "Berserk", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx33-PSwfE5B0gejI.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Horror", "Supernatural"], "max_episode_seen": 24.0, "watched_episodes": 2, "last_watched": "2026-07-10T07:24:01Z", "sequels": [{"relation": "ALTERNATIVE", "id": 10218, "title": "Berserk: The Golden Age Arc I - The Egg of the King", "status": "FINISHED", "format": "MOVIE", "season": "WINTER", "year": 2012, "url": "https://anilist.co/anime/10218"}, {"relation": "ALTERNATIVE", "id": 12113, "title": "Berserk: The Golden Age Arc II - The Battle for Doldrey", "status": "FINISHED", "format": "MOVIE", "season": "SUMMER", "year": 2012, "url": "https://anilist.co/anime/12113"}, {"relation": "ALTERNATIVE", "id": 12115, "title": "Berserk: The Golden Age Arc III - The Advent", "status": "FINISHED", "format": "MOVIE", "season": "WINTER", "year": 2013, "url": "https://anilist.co/anime/12115"}, {"relation": "ALTERNATIVE", "id": 155011, "title": "Berserk: The Golden Age Arc - Memorial Edition", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2022, "url": "https://anilist.co/anime/155011"}]}, {"anilist_id": 183161, "title_romaji": "Saikyou no Ousama, Nidome no Jinsei wa Nani wo Suru?", "title_english": "The Beginning After the End", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx183161-5M054tuPmZJX.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 25, "last_watched": "2026-07-10T07:22:08Z", "sequels": [{"relation": "SEQUEL", "id": 194317, "title": "The Beginning After the End Season 2", "status": "FINISHED", "format": "TV", "season": "SPRING", "year": 2026, "url": "https://anilist.co/anime/194317"}]}, {"anilist_id": 175872, "title_romaji": "Isshun de Chiryou Shiteita no ni Yakutatazu to Tsuihou Sareta Tensai Chiyushi, Yami Healer Toshite Tanoshiku Ikiru", "title_english": "The Brilliant Healer's New Life in the Shadows", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx175872-d55nfiC4WWHO.jpg", "genres": ["Action", "Comedy", "Fantasy"], "max_episode_seen": 1.0, "watched_episodes": 1, "last_watched": "2026-07-08T10:07:12Z", "sequels": [{"relation": "SEQUEL", "id": 205432, "title": "Isshun de Chiryou Shiteita no ni Yakutatazu to Tsuihou Sareta Tensai Chiyushi, Yami Healer Toshite Tanoshiku Ikiru 2nd Season", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/205432"}]}, {"anilist_id": 168194, "title_romaji": "Sengoku Youko", "title_english": "Sengoku Youko", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx168194-I7O79icUs0ou.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 1.0, "watched_episodes": 1, "last_watched": "2026-07-08T10:05:31Z", "sequels": [{"relation": "SEQUEL", "id": 176660, "title": "Sengoku Youko: The Thousandfold Chaos Arc", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2024, "url": "https://anilist.co/anime/176660"}]}, {"anilist_id": 147105, "title_romaji": "Tongari Boushi no Atelier", "title_english": "Witch Hat Atelier", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx147105-rwOX8qyUy8gV.jpg", "genres": ["Adventure", "Drama", "Fantasy"], "max_episode_seen": 13.0, "watched_episodes": 22, "last_watched": "2026-07-07T07:59:11Z", "sequels": [{"relation": "SEQUEL", "id": 213702, "title": "Witch Hat Atelier Season 2", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/213702"}]}, {"anilist_id": 174576, "title_romaji": "Tsue to Tsurugi no Wistoria", "title_english": "Wistoria: Wand and Sword", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx174576-tpKcHG0eO6CS.jpg", "genres": ["Action", "Comedy", "Drama", "Fantasy"], "max_episode_seen": 24.0, "watched_episodes": 42, "last_watched": "2026-07-05T19:46:05Z", "sequels": [{"relation": "SEQUEL", "id": 182300, "title": "Wistoria: Wand and Sword Season 2", "status": "FINISHED", "format": "TV", "season": "SPRING", "year": 2026, "url": "https://anilist.co/anime/182300"}]}, {"anilist_id": 128893, "title_romaji": "Jigokuraku", "title_english": "Hell’s Paradise", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx128893-Gc2t8b8M0mVu.jpg", "genres": ["Action", "Adventure", "Mystery", "Supernatural"], "max_episode_seen": 25.0, "watched_episodes": 36, "last_watched": "2026-07-02T16:55:21Z", "sequels": [{"relation": "SEQUEL", "id": 166613, "title": "Hell’s Paradise Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2026, "url": "https://anilist.co/anime/166613"}]}, {"anilist_id": 11757, "title_romaji": "Sword Art Online", "title_english": "Sword Art Online", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx11757-SxYDUzdr9rh2.jpg", "genres": ["Action", "Adventure", "Fantasy", "Romance"], "max_episode_seen": 1.0, "watched_episodes": 1, "last_watched": "2026-07-01T09:18:22Z", "sequels": [{"relation": "SEQUEL", "id": 20021, "title": "Sword Art Online EXTRA EDITION", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2013, "url": "https://anilist.co/anime/20021"}, {"relation": "SEQUEL", "id": 20594, "title": "Sword Art Online II", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2014, "url": "https://anilist.co/anime/20594"}, {"relation": "ALTERNATIVE", "id": 124140, "title": "Sword Art Online the Movie -Progressive- Aria of a Starless Night", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2021, "url": "https://anilist.co/anime/124140"}, {"relation": "ALTERNATIVE", "id": 208754, "title": "Unanswered//butterfly: Sword Art Online", "status": "FINISHED", "format": "MOVIE", "season": "SUMMER", "year": 2026, "url": "https://anilist.co/anime/208754"}]}, {"anilist_id": 105333, "title_romaji": "Dr. STONE", "title_english": "Dr. STONE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx105333-GybuoSoOZfpH.jpg", "genres": ["Action", "Adventure", "Comedy", "Sci-Fi"], "max_episode_seen": 37.0, "watched_episodes": 114, "last_watched": "2026-06-29T17:56:04Z", "sequels": [{"relation": "SEQUEL", "id": 113936, "title": "Dr. STONE: STONE WARS", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2021, "url": "https://anilist.co/anime/113936"}]}, {"anilist_id": 159831, "title_romaji": "Zom 100: Zombie ni Naru Made ni Shitai 100 no Koto", "title_english": "Zom 100: Bucket List of the Dead", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx159831-cJUNqCqzuApc.png", "genres": ["Action", "Adventure", "Comedy", "Horror", "Supernatural"], "max_episode_seen": 12.0, "watched_episodes": 13, "last_watched": "2026-06-29T10:20:07Z", "sequels": []}, {"anilist_id": 151970, "title_romaji": "Shangri-La Frontier", "title_english": "Shangri-La Frontier", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx151970-xtIx3VqEk02X.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Sci-Fi"], "max_episode_seen": 50.0, "watched_episodes": 71, "last_watched": "2026-06-02T13:41:24Z", "sequels": [{"relation": "SIDE_STORY", "id": 169750, "title": "Shangri-La Frontier Mini Anime", "status": "FINISHED", "format": "ONA", "season": "FALL", "year": 2023, "url": "https://anilist.co/anime/169750"}, {"relation": "SEQUEL", "id": 176508, "title": "Shangri-La Frontier Season 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2024, "url": "https://anilist.co/anime/176508"}]}, {"anilist_id": 9919, "title_romaji": "Ao no Exorcist", "title_english": "Blue Exorcist", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx9919-nXS7JOZrWHfS.jpg", "genres": ["Action", "Fantasy", "Supernatural"], "max_episode_seen": 12.0, "watched_episodes": 16, "last_watched": "2026-05-22T07:55:05Z", "sequels": [{"relation": "SIDE_STORY", "id": 10647, "title": "Blue Exorcist Specials", "status": "FINISHED", "format": "SPECIAL", "season": "SPRING", "year": 2011, "url": "https://anilist.co/anime/10647"}, {"relation": "SIDE_STORY", "id": 11266, "title": "Blue Exorcist: Runaway Kuro", "status": "FINISHED", "format": "OVA", "season": "FALL", "year": 2011, "url": "https://anilist.co/anime/11266"}, {"relation": "SIDE_STORY", "id": 11737, "title": "Blue Exorcist: The Movie", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2012, "url": "https://anilist.co/anime/11737"}, {"relation": "SEQUEL", "id": 21861, "title": "Blue Exorcist: Kyoto Saga", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2017, "url": "https://anilist.co/anime/21861"}]}, {"anilist_id": 114121, "title_romaji": "Xian Wang De Richang Shenghuo", "title_english": "The Daily Life of the Immortal King", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx114121-vxWVgIBlBjox.png", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 14, "last_watched": "2026-05-22T07:53:47Z", "sequels": [{"relation": "SEQUEL", "id": 126357, "title": "The Daily Life of the Immortal King Season 2", "status": "FINISHED", "format": "ONA", "season": null, "year": 2021, "url": "https://anilist.co/anime/126357"}]}, {"anilist_id": 113415, "title_romaji": "Jujutsu Kaisen", "title_english": "JUJUTSU KAISEN", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx113415-LHBAeoZDIsnF.jpg", "genres": ["Action", "Drama", "Supernatural"], "max_episode_seen": 59.0, "watched_episodes": 93, "last_watched": "2026-04-22T22:02:42Z", "sequels": [{"relation": "SEQUEL", "id": 145064, "title": "JUJUTSU KAISEN Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2023, "url": "https://anilist.co/anime/145064"}]}, {"anilist_id": 105310, "title_romaji": "Enen no Shouboutai", "title_english": "Fire Force", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx105310-2PKUvoaA6fTn.jpg", "genres": ["Action", "Drama", "Sci-Fi", "Supernatural"], "max_episode_seen": 24.0, "watched_episodes": 88, "last_watched": "2026-04-10T12:46:07Z", "sequels": [{"relation": "SEQUEL", "id": 114236, "title": "Fire Force Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2020, "url": "https://anilist.co/anime/114236"}]}, {"anilist_id": 140960, "title_romaji": "SPY×FAMILY", "title_english": "SPY x FAMILY", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx140960-Kb6R5nYQfjmP.jpg", "genres": ["Action", "Comedy", "Slice of Life", "Supernatural"], "max_episode_seen": 50.0, "watched_episodes": 13, "last_watched": "2026-04-09T14:57:06Z", "sequels": [{"relation": "SEQUEL", "id": 142838, "title": "SPY x FAMILY Cour 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2022, "url": "https://anilist.co/anime/142838"}]}, {"anilist_id": 130586, "title_romaji": "Shijou Saikyou no Daimaou, Murabito A ni Tensei suru", "title_english": "The Greatest Demon Lord Is Reborn as a Typical Nobody", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx130586-vzoz4X37RZwc.jpg", "genres": ["Action", "Ecchi", "Fantasy", "Romance"], "max_episode_seen": 12.0, "watched_episodes": 8, "last_watched": "2026-04-09T14:56:45Z", "sequels": []}, {"anilist_id": 15809, "title_romaji": "Hataraku Maou-sama!", "title_english": "The Devil is a Part-Timer!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx15809-ECv3HyOYJKrk.jpg", "genres": ["Comedy", "Fantasy", "Romance", "Slice of Life"], "max_episode_seen": 24.0, "watched_episodes": 10, "last_watched": "2026-04-09T14:55:32Z", "sequels": [{"relation": "SEQUEL", "id": 130592, "title": "The Devil is a Part-Timer! Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2022, "url": "https://anilist.co/anime/130592"}]}, {"anilist_id": 99423, "title_romaji": "Darling in the Franxx", "title_english": "DARLING in the FRANXX", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/nx99423-8MBxtwCeHf8B.png", "genres": ["Action", "Drama", "Mecha", "Psychological", "Romance", "Sci-Fi"], "max_episode_seen": 24.0, "watched_episodes": 25, "last_watched": "2026-04-09T14:54:52Z", "sequels": []}, {"anilist_id": 101165, "title_romaji": "Goblin Slayer", "title_english": "GOBLIN SLAYER", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101165-v5NwPXWPFDuD.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 2, "last_watched": "2026-04-09T14:54:21Z", "sequels": [{"relation": "SEQUEL", "id": 108623, "title": "GOBLIN SLAYER -GOBLIN’S CROWN-", "status": "FINISHED", "format": "MOVIE", "season": "WINTER", "year": 2020, "url": "https://anilist.co/anime/108623"}]}, {"anilist_id": 101759, "title_romaji": "Yakusoku no Neverland", "title_english": "The Promised Neverland", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101759-8UR7r9MNVpz2.jpg", "genres": ["Drama", "Fantasy", "Horror", "Mystery", "Psychological", "Thriller"], "max_episode_seen": 12.0, "watched_episodes": 25, "last_watched": "2026-04-09T14:53:44Z", "sequels": [{"relation": "SEQUEL", "id": 108725, "title": "The Promised Neverland Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2021, "url": "https://anilist.co/anime/108725"}]}, {"anilist_id": 170890, "title_romaji": "THE NEW GATE", "title_english": "THE NEW GATE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx170890-XrggQYjAJAGa.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2026-04-09T14:53:16Z", "sequels": []}, {"anilist_id": 152137, "title_romaji": "Isekai Shikkaku", "title_english": "No Longer Allowed in Another World", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx152137-JpefyFlYa03R.jpg", "genres": ["Comedy", "Fantasy", "Romance", "Slice of Life", "Supernatural"], "max_episode_seen": 12.0, "watched_episodes": 2, "last_watched": "2026-04-09T14:52:47Z", "sequels": []}, {"anilist_id": 173584, "title_romaji": "Maou Gun Saikyou no Majutsushi wa Ningen datta", "title_english": "The Strongest Magician in the Demon Lord's Army was a Human", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx173584-nyZElmr8218W.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 5, "last_watched": "2026-04-09T14:52:27Z", "sequels": []}, {"anilist_id": 20464, "title_romaji": "Haikyuu!!", "title_english": "HAIKYU!!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20464-ooZUyBe4ptp9.png", "genres": ["Comedy", "Drama", "Sports"], "max_episode_seen": 23.0, "watched_episodes": 10, "last_watched": "2026-04-09T14:51:49Z", "sequels": [{"relation": "SEQUEL", "id": 20992, "title": "HAIKYU!! 2nd Season", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2015, "url": "https://anilist.co/anime/20992"}, {"relation": "SIDE_STORY", "id": 20884, "title": "HAIKYU!!: Lev Appears!", "status": "FINISHED", "format": "OVA", "season": "FALL", "year": 2014, "url": "https://anilist.co/anime/20884"}]}, {"anilist_id": 100183, "title_romaji": "Sword Art Online Alternative: Gun Gale Online", "title_english": "Sword Art Online Alternative: Gun Gale Online", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/nx100183-v4S2sGAG3A24.jpg", "genres": ["Action", "Sci-Fi"], "max_episode_seen": 12.0, "watched_episodes": 7, "last_watched": "2026-04-09T14:51:28Z", "sequels": [{"relation": "SEQUEL", "id": 167141, "title": "Sword Art Online Alternative: Gun Gale Online II", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2024, "url": "https://anilist.co/anime/167141"}]}, {"anilist_id": 21355, "title_romaji": "Re:Zero kara Hajimeru Isekai Seikatsu", "title_english": "Re:ZERO -Starting Life in Another World-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21355-wRVUrGxpvIQQ.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Psychological", "Romance", "Thriller"], "max_episode_seen": 13.0, "watched_episodes": 20, "last_watched": "2026-04-09T14:51:08Z", "sequels": [{"relation": "SIDE_STORY", "id": 100049, "title": "Re:ZERO -Starting Life in Another World- OVAs", "status": "FINISHED", "format": "OVA", "season": "FALL", "year": 2018, "url": "https://anilist.co/anime/100049"}, {"relation": "SEQUEL", "id": 108632, "title": "Re:ZERO -Starting Life in Another World- Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2020, "url": "https://anilist.co/anime/108632"}]}, {"anilist_id": 100668, "title_romaji": "Arifureta Shokugyou de Sekai Saikyou", "title_english": "Arifureta: From Commonplace to World's Strongest", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx100668-DvOn5bMOt4cy.jpg", "genres": ["Action", "Adventure", "Fantasy", "Psychological"], "max_episode_seen": 16.0, "watched_episodes": 37, "last_watched": "2026-04-09T14:50:43Z", "sequels": [{"relation": "SIDE_STORY", "id": 111729, "title": "Arifureta: From Commonplace to World's Strongest Specials", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2019, "url": "https://anilist.co/anime/111729"}, {"relation": "SEQUEL", "id": 112323, "title": "Arifureta: From Commonplace to World's Strongest Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2022, "url": "https://anilist.co/anime/112323"}, {"relation": "SIDE_STORY", "id": 213514, "title": "Arifureta Shokugyou de Sekai Saikyou Picture Drama", "status": "FINISHED", "format": "ONA", "season": "SUMMER", "year": 2019, "url": "https://anilist.co/anime/213514"}]}, {"anilist_id": 171018, "title_romaji": "Dandadan", "title_english": "DAN DA DAN", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx171018-60q1B6GK2Ghb.jpg", "genres": ["Action", "Comedy", "Drama", "Romance", "Sci-Fi", "Supernatural"], "max_episode_seen": 24.0, "watched_episodes": 14, "last_watched": "2026-04-09T14:50:21Z", "sequels": [{"relation": "SEQUEL", "id": 185660, "title": "DAN DA DAN Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2025, "url": "https://anilist.co/anime/185660"}]}, {"anilist_id": 99263, "title_romaji": "Tate no Yuusha no Nariagari", "title_english": "The Rising of the Shield Hero", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx99263-LcazQwdlWzMy.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 25.0, "watched_episodes": 58, "last_watched": "2026-04-09T14:49:07Z", "sequels": [{"relation": "SEQUEL", "id": 111321, "title": "The Rising of the Shield Hero Season 2", "status": "FINISHED", "format": "TV", "season": "SPRING", "year": 2022, "url": "https://anilist.co/anime/111321"}]}, {"anilist_id": 117343, "title_romaji": "Munou na Nana", "title_english": "Talentless Nana", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx117343-NgCLZTaxallv.jpg", "genres": ["Drama", "Horror", "Mystery", "Psychological", "Supernatural", "Thriller"], "max_episode_seen": 13.0, "watched_episodes": 13, "last_watched": "2026-04-09T14:48:49Z", "sequels": []}, {"anilist_id": 187901, "title_romaji": "Dead Account", "title_english": "Dead Account", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx187901-T91HmZAaNwOF.jpg", "genres": ["Action", "Supernatural"], "max_episode_seen": 12.0, "watched_episodes": 3, "last_watched": "2026-04-09T14:48:34Z", "sequels": []}, {"anilist_id": 154587, "title_romaji": "Sousou no Frieren", "title_english": "Frieren: Beyond Journey’s End", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154587-qQTzQnEJJ3oB.jpg", "genres": ["Adventure", "Drama", "Fantasy"], "max_episode_seen": 28.0, "watched_episodes": 31, "last_watched": "2026-04-09T14:48:06Z", "sequels": [{"relation": "SIDE_STORY", "id": 170068, "title": "Sousou no Frieren: ●● no Mahou", "status": "FINISHED", "format": "ONA", "season": "FALL", "year": 2023, "url": "https://anilist.co/anime/170068"}, {"relation": "SEQUEL", "id": 182255, "title": "Frieren: Beyond Journey’s End Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2026, "url": "https://anilist.co/anime/182255"}, {"relation": "SIDE_STORY", "id": 189513, "title": "Sousou no Frieren: ●● no Mahou Part 2", "status": "FINISHED", "format": "ONA", "season": "SPRING", "year": 2025, "url": "https://anilist.co/anime/189513"}]}, {"anilist_id": 126546, "title_romaji": "Seirei Gensouki", "title_english": "Seirei Gensouki: Spirit Chronicles", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx126546-Jujx9OvKxLzA.jpg", "genres": ["Action", "Drama", "Fantasy", "Romance"], "max_episode_seen": 12.0, "watched_episodes": 27, "last_watched": "2026-04-09T14:47:30Z", "sequels": [{"relation": "SEQUEL", "id": 141182, "title": "Seirei Gensouki: Spirit Chronicles Season 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2024, "url": "https://anilist.co/anime/141182"}, {"relation": "SIDE_STORY", "id": 136946, "title": "Celia-sensei no Wakuwaku Magical Kyoushitsu", "status": "FINISHED", "format": "ONA", "season": "SUMMER", "year": 2021, "url": "https://anilist.co/anime/136946"}]}, {"anilist_id": 166617, "title_romaji": "Fate/strange Fake", "title_english": "Fate/strange Fake", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx166617-34fpC9y47tTx.png", "genres": ["Action", "Adventure", "Fantasy", "Mystery", "Supernatural"], "max_episode_seen": 13.0, "watched_episodes": 2, "last_watched": "2026-04-09T14:47:16Z", "sequels": [{"relation": "SEQUEL", "id": 209984, "title": "Fate/strange Fake (Zoku-hen)", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/209984"}]}, {"anilist_id": 190143, "title_romaji": "Shunkashuutou Daikousha: Haru no Mai", "title_english": "Agents of the Four Seasons: Dance of Spring", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx190143-IqqbkMAF0GOo.jpg", "genres": ["Drama", "Fantasy", "Romance"], "max_episode_seen": 2.0, "watched_episodes": 2, "last_watched": "2026-04-09T14:46:51Z", "sequels": []}, {"anilist_id": 110277, "title_romaji": "Shingeki no Kyojin: The Final Season", "title_english": "Attack on Titan Final Season", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx110277-sKUNXAsWMNFw.jpg", "genres": ["Action", "Drama", "Fantasy", "Mystery"], "max_episode_seen": 87.0, "watched_episodes": 110, "last_watched": "2026-04-09T14:45:19Z", "sequels": [{"relation": "SEQUEL", "id": 131681, "title": "Attack on Titan Final Season Part 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2022, "url": "https://anilist.co/anime/131681"}]}, {"anilist_id": 127230, "title_romaji": "Chainsaw Man", "title_english": "Chainsaw Man", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx127230-DdP4vAdssLoz.png", "genres": ["Action", "Drama", "Horror", "Supernatural"], "max_episode_seen": 12.0, "watched_episodes": 26, "last_watched": "2026-04-09T14:44:46Z", "sequels": [{"relation": "SEQUEL", "id": 171627, "title": "Chainsaw Man – The Movie: Reze Arc", "status": "FINISHED", "format": "MOVIE", "season": "SUMMER", "year": 2025, "url": "https://anilist.co/anime/171627"}, {"relation": "SIDE_STORY", "id": 198726, "title": "Chainsaw Days", "status": "FINISHED", "format": "ONA", "season": "SUMMER", "year": 2025, "url": "https://anilist.co/anime/198726"}]}, {"anilist_id": 127401, "title_romaji": "Platinum End", "title_english": "Platinum End", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx127401-fVKVbuIE5W5Q.jpg", "genres": ["Drama", "Mystery", "Psychological", "Romance", "Supernatural"], "max_episode_seen": 24.0, "watched_episodes": 12, "last_watched": "2026-04-09T14:44:25Z", "sequels": []}, {"anilist_id": 99699, "title_romaji": "Golden Kamuy", "title_english": "Golden Kamuy", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx99699-mBCjpoWpAVGX.jpg", "genres": ["Action", "Adventure", "Comedy"], "max_episode_seen": 62.0, "watched_episodes": 21, "last_watched": "2026-04-09T14:43:55Z", "sequels": [{"relation": "SIDE_STORY", "id": 101830, "title": "Golden Kamuy OVA", "status": "FINISHED", "format": "OVA", "season": "SUMMER", "year": 2018, "url": "https://anilist.co/anime/101830"}, {"relation": "SEQUEL", "id": 102977, "title": "Golden Kamuy Season 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2018, "url": "https://anilist.co/anime/102977"}]}, {"anilist_id": 186794, "title_romaji": "Ansatsusha de Aru Ore no Status ga Yuusha yori mo Akiraka ni Tsuyoi no da ga", "title_english": "My Status as an Assassin Obviously Exceeds the Hero’s", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx186794-Ns8xWNdMdOxq.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 16, "last_watched": "2026-04-09T14:43:10Z", "sequels": []}, {"anilist_id": 21613, "title_romaji": "Youjo Senki", "title_english": "Saga of Tanya the Evil", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21613-qT3NiwYP5dYc.png", "genres": ["Action", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 29, "last_watched": "2026-04-09T14:42:53Z", "sequels": [{"relation": "SIDE_STORY", "id": 98186, "title": "Youjo Shenki", "status": "FINISHED", "format": "ONA", "season": "WINTER", "year": 2017, "url": "https://anilist.co/anime/98186"}, {"relation": "SEQUEL", "id": 100878, "title": "Saga of Tanya the Evil - the Movie -", "status": "FINISHED", "format": "MOVIE", "season": "WINTER", "year": 2019, "url": "https://anilist.co/anime/100878"}, {"relation": "SIDE_STORY", "id": 135866, "title": "Saga of Tanya the Evil: Operation Desert Pasta", "status": "FINISHED", "format": "ONA", "season": "SUMMER", "year": 2021, "url": "https://anilist.co/anime/135866"}]}, {"anilist_id": 101922, "title_romaji": "Kimetsu no Yaiba", "title_english": "Demon Slayer: Kimetsu no Yaiba", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Supernatural"], "max_episode_seen": 26.0, "watched_episodes": 67, "last_watched": "2026-04-09T14:42:02Z", "sequels": [{"relation": "SEQUEL", "id": 112151, "title": "Demon Slayer -Kimetsu no Yaiba- The Movie: Mugen Train", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2020, "url": "https://anilist.co/anime/112151"}, {"relation": "SEQUEL", "id": 129874, "title": "Demon Slayer: Kimetsu no Yaiba Mugen Train Arc", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2021, "url": "https://anilist.co/anime/129874"}]}, {"anilist_id": 21459, "title_romaji": "Boku no Hero Academia", "title_english": "My Hero Academia", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21459-nYh85uj2Fuwr.jpg", "genres": ["Action", "Adventure", "Comedy"], "max_episode_seen": 159.0, "watched_episodes": 230, "last_watched": "2026-04-09T14:41:05Z", "sequels": [{"relation": "SEQUEL", "id": 21856, "title": "My Hero Academia Season 2", "status": "FINISHED", "format": "TV", "season": "SPRING", "year": 2017, "url": "https://anilist.co/anime/21856"}, {"relation": "SIDE_STORY", "id": 87486, "title": "Boku no Hero Academia: Sukue! Kyuujo Kunren!", "status": "FINISHED", "format": "OVA", "season": "SPRING", "year": 2017, "url": "https://anilist.co/anime/87486"}]}, {"anilist_id": 21087, "title_romaji": "One Punch Man", "title_english": "One-Punch Man", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21087-B5DHjqZ3kW4b.jpg", "genres": ["Action", "Comedy", "Sci-Fi", "Supernatural"], "max_episode_seen": 9013.0, "watched_episodes": 38, "last_watched": "2026-04-09T14:40:36Z", "sequels": [{"relation": "SIDE_STORY", "id": 21416, "title": "One-Punch Man OVA", "status": "FINISHED", "format": "OVA", "season": "WINTER", "year": 2015, "url": "https://anilist.co/anime/21416"}, {"relation": "SEQUEL", "id": 97668, "title": "One-Punch Man Season 2", "status": "FINISHED", "format": "TV", "season": "SPRING", "year": 2019, "url": "https://anilist.co/anime/97668"}]}, {"anilist_id": 97940, "title_romaji": "Black Clover", "title_english": "Black Clover", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx97940-fyh8o7gNbha0.png", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 170.0, "watched_episodes": 172, "last_watched": "2026-03-29T20:44:24Z", "sequels": [{"relation": "ALTERNATIVE", "id": 87528, "title": "Black Clover: Jump Festa 2016 Special", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2016, "url": "https://anilist.co/anime/87528"}, {"relation": "SIDE_STORY", "id": 131680, "title": "Black Clover: Sword of the Wizard King", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2023, "url": "https://anilist.co/anime/131680"}, {"relation": "SEQUEL", "id": 195604, "title": "Black Clover Season 2", "status": "NOT_YET_RELEASED", "format": "TV", "season": "FALL", "year": 2026, "url": "https://anilist.co/anime/195604"}]}, {"anilist_id": 167152, "title_romaji": "Yuusha Kei ni Shosu: Choubatsu Yuusha 9004-tai Keimu Kiroku", "title_english": "Sentenced to Be a Hero", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx167152-O1pm6DWwifBD.jpg", "genres": ["Action", "Drama", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 13, "last_watched": "2026-03-28T12:23:04Z", "sequels": [{"relation": "SEQUEL", "id": 209963, "title": "Sentenced to Be a Hero Season 2", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/209963"}]}, {"anilist_id": 185993, "title_romaji": "Kizoku Tensei: Megumareta Umare kara Saikyou no Chikara wo Eru", "title_english": "Noble Reincarnation: Born Blessed, So I'll Obtain Ultimate Power", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx185993-BecPUaWfZJgR.png", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2026-03-24T19:50:45Z", "sequels": []}, {"anilist_id": 151801, "title_romaji": "MASHLE", "title_english": "MASHLE: MAGIC AND MUSCLES", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx151801-XxVf22Le6C8o.png", "genres": ["Action", "Comedy", "Fantasy"], "max_episode_seen": 24.0, "watched_episodes": 43, "last_watched": "2026-02-17T16:57:14Z", "sequels": [{"relation": "SEQUEL", "id": 166610, "title": "MASHLE: MAGIC AND MUSCLES Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2024, "url": "https://anilist.co/anime/166610"}]}, {"anilist_id": 101348, "title_romaji": "VINLAND SAGA", "title_english": "Vinland Saga", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101348-2fhDFPCuMNiz.jpg", "genres": ["Action", "Adventure", "Drama"], "max_episode_seen": 24.0, "watched_episodes": 52, "last_watched": "2026-02-16T12:26:43Z", "sequels": [{"relation": "SEQUEL", "id": 136430, "title": "Vinland Saga Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2023, "url": "https://anilist.co/anime/136430"}]}, {"anilist_id": 177474, "title_romaji": "Tougen Anki", "title_english": "TOUGEN ANKI", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx177474-oHil1yLWldfl.jpg", "genres": ["Action", "Mystery", "Supernatural"], "max_episode_seen": 24.0, "watched_episodes": 25, "last_watched": "2026-02-09T23:21:36Z", "sequels": [{"relation": "SEQUEL", "id": 204650, "title": "Tougen Anki: Nikko Kegon Falls Arc", "status": "NOT_YET_RELEASED", "format": "TV", "season": "FALL", "year": 2026, "url": "https://anilist.co/anime/204650"}]}, {"anilist_id": 131573, "title_romaji": "Jujutsu Kaisen 0", "title_english": "JUJUTSU KAISEN 0", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx131573-rpl82vDEDRm6.jpg", "genres": ["Action", "Supernatural"], "max_episode_seen": 1.0, "watched_episodes": 3, "last_watched": "2026-01-23T21:58:03Z", "sequels": [{"relation": "SEQUEL", "id": 113415, "title": "JUJUTSU KAISEN", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2020, "url": "https://anilist.co/anime/113415"}]}, {"anilist_id": 178025, "title_romaji": "Gachiakuta", "title_english": "Gachiakuta", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178025-cWJKEsZynkil.jpg", "genres": ["Action", "Drama", "Fantasy"], "max_episode_seen": 24.0, "watched_episodes": 36, "last_watched": "2026-01-01T13:26:32Z", "sequels": [{"relation": "SEQUEL", "id": 204436, "title": "Gachiakuta Season 2", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/204436"}]}, {"anilist_id": 137822, "title_romaji": "Blue Lock", "title_english": "BLUE LOCK", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx137822-U8naszP96vzC.png", "genres": ["Action", "Drama", "Sports"], "max_episode_seen": 38.0, "watched_episodes": 45, "last_watched": "2025-12-08T17:00:29Z", "sequels": [{"relation": "SEQUEL", "id": 163146, "title": "BLUE LOCK Season 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2024, "url": "https://anilist.co/anime/163146"}, {"relation": "SIDE_STORY", "id": 163147, "title": "BLUE LOCK THE MOVIE -EPISODE NAGI-", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2024, "url": "https://anilist.co/anime/163147"}]}, {"anilist_id": 153288, "title_romaji": "Kaijuu 8-gou", "title_english": "Kaiju No. 8", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx153288-25FBfFJzEQ5O.jpg", "genres": ["Action", "Sci-Fi"], "max_episode_seen": 23.0, "watched_episodes": 36, "last_watched": "2025-10-27T21:17:55Z", "sequels": [{"relation": "SEQUEL", "id": 178754, "title": "Kaiju No. 8 Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2025, "url": "https://anilist.co/anime/178754"}, {"relation": "SIDE_STORY", "id": 179999, "title": "Kaiju No.8: Hoshina's Day Off", "status": "FINISHED", "format": "SPECIAL", "season": "WINTER", "year": 2025, "url": "https://anilist.co/anime/179999"}, {"relation": "SIDE_STORY", "id": 186300, "title": "minute! Kaiju No. 8", "status": "FINISHED", "format": "ONA", "season": "WINTER", "year": 2024, "url": "https://anilist.co/anime/186300"}]}, {"anilist_id": 98659, "title_romaji": "Youkoso Jitsuryoku Shijou Shugi no Kyoushitsu e", "title_english": "Classroom of the Elite", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx98659-WNyPLIZDpGGY.jpg", "genres": ["Drama", "Psychological"], "max_episode_seen": 13.0, "watched_episodes": 39, "last_watched": "2025-09-21T12:48:47Z", "sequels": [{"relation": "SEQUEL", "id": 145545, "title": "Classroom of the Elite Season 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2022, "url": "https://anilist.co/anime/145545"}]}, {"anilist_id": 163270, "title_romaji": "WIND BREAKER", "title_english": "WIND BREAKER", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx163270-wboZJp0ybwVK.jpg", "genres": ["Action", "Comedy", "Drama"], "max_episode_seen": 25.0, "watched_episodes": 27, "last_watched": "2025-06-24T17:51:47Z", "sequels": [{"relation": "SEQUEL", "id": 178680, "title": "WIND BREAKER Season 2", "status": "FINISHED", "format": "TV", "season": "SPRING", "year": 2025, "url": "https://anilist.co/anime/178680"}]}, {"anilist_id": 1535, "title_romaji": "DEATH NOTE", "title_english": "Death Note", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1535-kUgkcrfOrkUM.jpg", "genres": ["Mystery", "Psychological", "Supernatural", "Thriller"], "max_episode_seen": 37.0, "watched_episodes": 37, "last_watched": "2025-02-27T21:34:42Z", "sequels": []}, {"anilist_id": 21175, "title_romaji": "Dragon Ball Super", "title_english": "Dragon Ball Super", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21175-EH06qlfF8TnB.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Sci-Fi"], "max_episode_seen": 131.0, "watched_episodes": 130, "last_watched": "2025-02-03T22:20:15Z", "sequels": [{"relation": "ALTERNATIVE", "id": 102352, "title": "Super Dragon Ball Heroes", "status": "FINISHED", "format": "ONA", "season": "SUMMER", "year": 2018, "url": "https://anilist.co/anime/102352"}, {"relation": "ALTERNATIVE", "id": 20778, "title": "Dragon Ball Z: Resurrection 'F'", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2015, "url": "https://anilist.co/anime/20778"}, {"relation": "ALTERNATIVE", "id": 14837, "title": "Dragon Ball Z: Battle of Gods", "status": "FINISHED", "format": "MOVIE", "season": "SPRING", "year": 2013, "url": "https://anilist.co/anime/14837"}, {"relation": "SEQUEL", "id": 101302, "title": "Dragon Ball Super: Broly", "status": "FINISHED", "format": "MOVIE", "season": "FALL", "year": 2018, "url": "https://anilist.co/anime/101302"}, {"relation": "SIDE_STORY", "id": 177442, "title": "Dragon Ball Z: The Real 4-D at Super Tenkaichi Budokai", "status": "FINISHED", "format": "SPECIAL", "season": "SPRING", "year": 2017, "url": "https://anilist.co/anime/177442"}]}, {"anilist_id": 169417, "title_romaji": "Re:Monster", "title_english": "Re:Monster", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx169417-izsfKg0hasRd.png", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 13, "last_watched": "2024-11-12T19:21:40Z", "sequels": [{"relation": "SEQUEL", "id": 199217, "title": "Re:Monster 2nd Season", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/199217"}]}, {"anilist_id": 163292, "title_romaji": "Shinmai Ossan Bouken-sha, Saikyou Party ni Shinu Hodo Kitaerarete Muteki ni Naru.", "title_english": "The Ossan Newbie Adventurer, Trained to Death by the Most Powerful Party, Became Invincible", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx163292-1DkPP4r5UI9Y.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-09-29T22:52:07Z", "sequels": []}, {"anilist_id": 173694, "title_romaji": "Hazure Waku no [Joutai Ijou Skill] de Saikyou ni Natta Ore ga Subete wo Juurin Suru made", "title_english": "Failure Frame: I Became the Strongest and Annihilated Everything with Low-Level Spells", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx173694-XcwGOMBxboOO.png", "genres": ["Action", "Adventure", "Drama", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-09-29T19:14:30Z", "sequels": []}, {"anilist_id": 145260, "title_romaji": "Kuro no Shoukanshi", "title_english": "Black Summoner", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx145260-Yt5W8aQQKqF2.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-09-18T17:16:10Z", "sequels": []}, {"anilist_id": 156039, "title_romaji": "Boushoku no Berserk", "title_english": "Berserk of Gluttony", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx156039-JnepQcVxXLLW.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Romance"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-09-13T22:48:47Z", "sequels": [{"relation": "SIDE_STORY", "id": 169749, "title": "Mattari Kaisetsu: Boushoku no Berserk", "status": "FINISHED", "format": "ONA", "season": "FALL", "year": 2023, "url": "https://anilist.co/anime/169749"}, {"relation": "SEQUEL", "id": 211495, "title": "Boushoku no Berserk 2nd Season", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": null, "url": "https://anilist.co/anime/211495"}]}, {"anilist_id": 125206, "title_romaji": "Tsuki ga Michibiku Isekai Douchuu", "title_english": "TSUKIMICHI -Moonlit Fantasy-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx125206-O2MsOWdW1lVi.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 25.0, "watched_episodes": 37, "last_watched": "2024-07-11T22:49:53Z", "sequels": [{"relation": "SEQUEL", "id": 139518, "title": "TSUKIMICHI -Moonlit Fantasy- Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2024, "url": "https://anilist.co/anime/139518"}]}, {"anilist_id": 108465, "title_romaji": "Mushoku Tensei: Isekai Ittara Honki Dasu", "title_english": "Mushoku Tensei: Jobless Reincarnation", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx108465-1ANspF1EWyFx.jpg", "genres": ["Adventure", "Drama", "Ecchi", "Fantasy"], "max_episode_seen": 24.0, "watched_episodes": 49, "last_watched": "2024-07-06T15:07:13Z", "sequels": [{"relation": "SEQUEL", "id": 127720, "title": "Mushoku Tensei: Jobless Reincarnation Cour 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2021, "url": "https://anilist.co/anime/127720"}]}, {"anilist_id": 160900, "title_romaji": "Hametsu no Oukoku", "title_english": "The Kingdoms of Ruin", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx160900-GxVB6H5ewrqv.jpg", "genres": ["Action", "Drama", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-06-23T17:14:43Z", "sequels": []}, {"anilist_id": 153818, "title_romaji": "Majo to Yajuu", "title_english": "The Witch and the Beast", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx153818-FWvl0RL6vDbq.png", "genres": ["Action", "Adventure", "Drama", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-04-14T21:40:37Z", "sequels": []}, {"anilist_id": 147642, "title_romaji": "Nozomanu Fushi no Boukensha", "title_english": "The Unwanted Undead Adventurer", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx147642-SztpXNn9ke6P.jpg", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2024-03-27T14:25:36Z", "sequels": [{"relation": "SEQUEL", "id": 185543, "title": "Nozomanu Fushi no Boukensha 2nd Season", "status": "NOT_YET_RELEASED", "format": "ONA", "season": null, "year": null, "url": "https://anilist.co/anime/185543"}]}, {"anilist_id": 120120, "title_romaji": "Tokyo Revengers", "title_english": "Tokyo Revengers", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx120120-cWDmnmeEntSe.jpg", "genres": ["Action", "Drama", "Romance", "Supernatural"], "max_episode_seen": 24.0, "watched_episodes": 50, "last_watched": "2023-12-17T16:10:37Z", "sequels": [{"relation": "SEQUEL", "id": 142853, "title": "Tokyo Revengers Season 2", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2023, "url": "https://anilist.co/anime/142853"}]}, {"anilist_id": 112301, "title_romaji": "Maou Gakuin no Futekigousha: Shijou Saikyou no Maou no Shiso, Tensei shite Shison-tachi no Gakkou e Kayou", "title_english": "The Misfit of Demon King Academy: History’s Strongest Demon King Reincarnates and Goes to School with His Descendants", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx112301-f88Fs2es4pSr.jpg", "genres": ["Action", "Comedy", "Fantasy"], "max_episode_seen": 13.0, "watched_episodes": 19, "last_watched": "2023-11-29T13:49:32Z", "sequels": [{"relation": "SEQUEL", "id": 130588, "title": "The Misfit of Demon King Academy Ⅱ: History's Strongest Demon King Reincarnates and Goes to School with His Descendants", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2023, "url": "https://anilist.co/anime/130588"}]}, {"anilist_id": 144553, "title_romaji": "Saikyou Onmyouji no Isekai Tenseiki", "title_english": "The Reincarnation of the Strongest Exorcist in Another World", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx144553-Q5M7iNLHMuCl.jpg", "genres": ["Action", "Adventure", "Fantasy", "Romance", "Supernatural"], "max_episode_seen": 4.0, "watched_episodes": 4, "last_watched": "2023-08-26T08:01:03Z", "sequels": [{"relation": "SIDE_STORY", "id": 162802, "title": "Saikyou Onmyouji Mini", "status": "FINISHED", "format": "ONA", "season": "WINTER", "year": 2022, "url": "https://anilist.co/anime/162802"}]}, {"anilist_id": 154391, "title_romaji": "Jitsu wa Ore, Saikyou Deshita?", "title_english": "Am I Actually the Strongest?", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154391-IEyLPkJBsMxO.jpg", "genres": ["Comedy", "Fantasy", "Romance"], "max_episode_seen": 1.0, "watched_episodes": 1, "last_watched": "2023-08-15T11:39:44Z", "sequels": []}, {"anilist_id": 157198, "title_romaji": "Dead Mount Death Play", "title_english": "Dead Mount Death Play", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx157198-LVZ7PgxWwc6v.jpg", "genres": ["Action", "Fantasy", "Supernatural", "Thriller"], "max_episode_seen": 12.0, "watched_episodes": 11, "last_watched": "2023-08-05T08:03:12Z", "sequels": [{"relation": "SEQUEL", "id": 162803, "title": "Dead Mount Death Play Part 2", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2023, "url": "https://anilist.co/anime/162803"}]}, {"anilist_id": 153845, "title_romaji": "Isekai de Cheat Skill wo Te ni Shita Ore wa, Genjitsu Sekai wo mo Musou Suru: Level Up wa Jinsei wo Kaeta", "title_english": "I Got a Cheat Skill in Another World and Became Unrivaled in The Real World, Too", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx153845-C47aoKy7wf19.jpg", "genres": ["Action", "Adventure", "Fantasy", "Romance"], "max_episode_seen": 13.0, "watched_episodes": 13, "last_watched": "2023-07-03T12:52:10Z", "sequels": [{"relation": "SEQUEL", "id": 170110, "title": "I Got a Cheat Skill in Another World and Became Unrivaled in The Real World, Too (Special) - The Legendary Dragon—Awakens", "status": "FINISHED", "format": "SPECIAL", "season": "WINTER", "year": 2026, "url": "https://anilist.co/anime/170110"}]}, {"anilist_id": 153332, "title_romaji": "Tensei Kizoku no Isekai Boukenroku: Jichou wo Shiranai Kamigami no Shito", "title_english": "The Aristocrat’s Otherworldly Adventure: Serving Gods Who Go Too Far", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx153332-k3Jg04E9jNRo.png", "genres": ["Action", "Comedy", "Fantasy", "Romance"], "max_episode_seen": 12.0, "watched_episodes": 12, "last_watched": "2023-06-25T17:51:37Z", "sequels": []}, {"anilist_id": 101168, "title_romaji": "Plunderer", "title_english": "Plunderer", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101168-LY3XA61byAVo.jpg", "genres": ["Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Romance"], "max_episode_seen": 13.0, "watched_episodes": 13, "last_watched": "2023-05-30T18:38:53Z", "sequels": []}, {"anilist_id": 21688, "title_romaji": "Mahoutsukai no Yome: Hoshi Matsu Hito", "title_english": "The Ancient Magus' Bride: Those Awaiting a Star", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21688-DOc6RxTYfXEr.jpg", "genres": ["Drama", "Fantasy"], "max_episode_seen": 7.0, "watched_episodes": 7, "last_watched": "2023-05-18T22:51:23Z", "sequels": []}, {"anilist_id": 21499, "title_romaji": "Sousei no Onmyouji", "title_english": "Twin Star Exorcists", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21499-JCxvIXc27mVT.jpg", "genres": ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Romance", "Supernatural"], "max_episode_seen": 50.0, "watched_episodes": 50, "last_watched": "2023-03-09T18:59:45Z", "sequels": []}, {"anilist_id": 137909, "title_romaji": "Ningen Fushin no Boukensha-tachi ga Sekai wo Sukuu you desu", "title_english": "Ningen Fushin: Adventurers Who Don’t Believe in Humanity Will Save the World", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx137909-7c0zEcg9GjYo.png", "genres": ["Action", "Adventure", "Fantasy"], "max_episode_seen": 5.0, "watched_episodes": 5, "last_watched": "2023-02-04T11:27:34Z", "sequels": []}, {"anilist_id": 145665, "title_romaji": "NieR:Automata Ver1.1a", "title_english": "NieR:Automata Ver1.1a", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx145665-Qs53Mta5ngqs.jpg", "genres": ["Action", "Drama", "Fantasy", "Mystery", "Psychological", "Sci-Fi"], "max_episode_seen": 3.0, "watched_episodes": 3, "last_watched": "2023-02-02T11:30:22Z", "sequels": [{"relation": "SEQUEL", "id": 167420, "title": "NieR:Automata Ver1.1a Cour 2", "status": "FINISHED", "format": "TV", "season": "SUMMER", "year": 2024, "url": "https://anilist.co/anime/167420"}]}, {"anilist_id": 116005, "title_romaji": "NOBLESSE", "title_english": "Noblesse", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx116005-yfngIe9aBaJw.jpg", "genres": ["Action", "Supernatural"], "max_episode_seen": 13.0, "watched_episodes": 13, "last_watched": "2023-01-03T10:32:47Z", "sequels": []}, {"anilist_id": 110446, "title_romaji": "Gibiate", "title_english": "GIBIATE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b110446-vqrjx22U4T9N.jpg", "genres": ["Action", "Horror"], "max_episode_seen": 3.0, "watched_episodes": 3, "last_watched": "2022-12-10T10:30:57Z", "sequels": []}, {"anilist_id": 21507, "title_romaji": "Mob Psycho 100", "title_english": "Mob Psycho 100", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21507-6YUSbh2m0N1p.jpg", "genres": ["Action", "Comedy", "Drama", "Psychological", "Slice of Life", "Supernatural"], "max_episode_seen": 2.0, "watched_episodes": 3, "last_watched": "2022-12-09T12:51:43Z", "sequels": [{"relation": "SEQUEL", "id": 101338, "title": "Mob Psycho 100 II", "status": "FINISHED", "format": "TV", "season": "WINTER", "year": 2019, "url": "https://anilist.co/anime/101338"}, {"relation": "SIDE_STORY", "id": 102449, "title": "Mob Psycho mini", "status": "FINISHED", "format": "SPECIAL", "season": "FALL", "year": 2016, "url": "https://anilist.co/anime/102449"}]}, {"anilist_id": 21291, "title_romaji": "Joker Game", "title_english": "Joker Game", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21291-WJ1GwBQ1eHM5.jpg", "genres": ["Action", "Drama", "Mystery", "Psychological", "Thriller"], "max_episode_seen": 12.0, "watched_episodes": 13, "last_watched": "2022-12-08T13:09:41Z", "sequels": [{"relation": "SIDE_STORY", "id": 21790, "title": "Joker Game: Kuroneko Yoru no Bouken", "status": "FINISHED", "format": "SPECIAL", "season": "SUMMER", "year": 2016, "url": "https://anilist.co/anime/21790"}]}, {"anilist_id": 20462, "title_romaji": "Hitsugi no Chaika", "title_english": "Chaika -The Coffin Princess-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20462-Gi2HXG6e1oYY.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 1.0, "watched_episodes": 2, "last_watched": "2022-05-30T17:42:48Z", "sequels": [{"relation": "SEQUEL", "id": 20719, "title": "Chaika -The Coffin Princess- AVENGING BATTLE", "status": "FINISHED", "format": "TV", "season": "FALL", "year": 2014, "url": "https://anilist.co/anime/20719"}]}, {"anilist_id": 129898, "title_romaji": "Sekai Saikou no Ansatsusha, Isekai Kizoku ni Tensei suru", "title_english": "The World's Finest Assassin Gets Reincarnated in Another World as an Aristocrat", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx129898-FRUzDtPhRigt.jpg", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Mystery", "Romance"], "max_episode_seen": 12.0, "watched_episodes": 13, "last_watched": "2022-04-26T08:50:56Z", "sequels": [{"relation": "SEQUEL", "id": 169579, "title": "Sekai Saikou no Ansatsusha, Isekai Kizoku ni Tensei suru 2nd Season", "status": "NOT_YET_RELEASED", "format": "TV", "season": null, "year": 2027, "url": "https://anilist.co/anime/169579"}]}, {"anilist_id": 195600, "title_romaji": "Yomi no Tsugai", "title_english": "Daemons of the Shadow Realm", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx195600-moI0UFArtOme.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Supernatural"], "max_episode_seen": 12.0, "watched_episodes": 15, "last_watched": "2026-07-08T10:04:21Z", "sequels": []}, {"anilist_id": 101280, "title_romaji": "Tensei Shitara Slime Datta Ken", "title_english": "That Time I Got Reincarnated as a Slime", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101280-tDxCVJm714nt.jpg", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 72.0, "watched_episodes": 92, "last_watched": "2026-07-06T11:08:01Z", "sequels": [{"relation": "SIDE_STORY", "id": 106509, "title": "That Time I Got Reincarnated as a Slime OAD", "status": "FINISHED", "format": "OVA", "year": 2019, "url": "https://anilist.co/anime/106509"}, {"relation": "SIDE_STORY", "id": 146503, "title": "Tensei Shitara Slime Datta Ken: Sukuwareru Ramiris", "status": "FINISHED", "format": "ONA", "year": 2022, "url": "https://anilist.co/anime/146503"}, {"relation": "SEQUEL", "id": 161802, "title": "That Time I Got Reincarnated as a Slime: Visions of Coleus", "status": "FINISHED", "format": "OVA", "year": 2023, "url": "https://anilist.co/anime/161802"}]}, {"anilist_id": 3972, "title_romaji": "Yu☆Gi☆Oh! 5D's", "title_english": "Yu-Gi-Oh! 5D's", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx3972-bSmlWKXrVvDv.png", "genres": ["Action", "Sci-Fi"], "max_episode_seen": 154.0, "watched_episodes": 2, "last_watched": "2026-04-09T14:56:18Z", "sequels": [{"relation": "SIDE_STORY", "id": 6951, "title": "Yu-Gi-Oh! 3D: Bonds Beyond Time", "status": "FINISHED", "format": "MOVIE", "year": 2010, "url": "https://anilist.co/anime/6951"}, {"relation": "SIDE_STORY", "id": 21590, "title": "Yu☆Gi☆Oh! 5D's: Shinkasuru Kettou! Stardust VS Red Demon's", "status": "FINISHED", "format": "SPECIAL", "year": 2008, "url": "https://anilist.co/anime/21590"}]}, {"anilist_id": 918, "title_romaji": "Gintama", "title_english": "Gintama", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx918-iOaeBVUn4uK7.jpg", "genres": ["Action", "Comedy", "Drama", "Sci-Fi"], "max_episode_seen": 367.0, "watched_episodes": 2, "last_watched": "2026-04-09T14:49:38Z", "sequels": [{"relation": "SEQUEL", "id": 9969, "title": "Gintama Season 2", "status": "FINISHED", "format": "TV", "year": 2011, "url": "https://anilist.co/anime/9969"}, {"relation": "SIDE_STORY", "id": 2951, "title": "Gintama: Jump Festa 2005 Special", "status": "FINISHED", "format": "SPECIAL", "year": 2005, "url": "https://anilist.co/anime/2951"}, {"relation": "SIDE_STORY", "id": 6945, "title": "Gintama: Jump Festa 2008 Special", "status": "FINISHED", "format": "SPECIAL", "year": 2009, "url": "https://anilist.co/anime/6945"}, {"relation": "SIDE_STORY", "id": 10643, "title": "Gintama: Dai Hanseikai", "status": "FINISHED", "format": "SPECIAL", "year": 2010, "url": "https://anilist.co/anime/10643"}, {"relation": "ALTERNATIVE", "id": 7472, "title": "Gintama - The Movie", "status": "FINISHED", "format": "MOVIE", "year": 2010, "url": "https://anilist.co/anime/7472"}, {"relation": "ALTERNATIVE", "id": 20760, "title": "Gintama: Yorinuki Gintama-san on Theater 2D", "status": "FINISHED", "format": "MOVIE", "year": 2012, "url": "https://anilist.co/anime/20760"}, {"relation": "ALTERNATIVE", "id": 197474, "title": "Gintama the Movie 2026: Yoshiwara in Flames", "status": "FINISHED", "format": "MOVIE", "year": 2026, "url": "https://anilist.co/anime/197474"}]}, {"anilist_id": 21629, "title_romaji": "NOBLESSE:Awakening", "title_english": "Noblesse: Awakening", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21629-1TAaEMqxkGC8.jpg", "genres": ["Action", "Supernatural"], "max_episode_seen": 1.0, "watched_episodes": 2, "last_watched": "2023-10-05T19:37:42Z", "sequels": [{"relation": "SEQUEL", "id": 116005, "title": "Noblesse", "status": "FINISHED", "format": "TV", "year": 2020, "url": "https://anilist.co/anime/116005"}]}, {"anilist_id": 271, "title_romaji": "Gad Guard", "title_english": "Gad Guard", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/271.jpg", "genres": ["Adventure", "Mecha", "Sci-Fi"], "max_episode_seen": 1.0, "watched_episodes": 1, "last_watched": "2022-12-09T12:50:55Z", "sequels": []}, {"anilist_id": 197715, "title_romaji": "LV999 no Murabito", "title_english": "The Villager of Level 999", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx197715-KLFLxU24U1uL.png", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "max_episode_seen": 6.0, "watched_episodes": 6, "last_watched": "2026-08-05T16:53:30Z", "sequels": []}]};
+const RECOS   = [{"id": 11061, "title": "Hunter x Hunter (2011)", "genres": ["Action", "Adventure", "Fantasy"], "score": 89, "episodes": 148, "popularity": 830245, "year": 2011, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx11061-y5gsT1hoHuHw.png", "url": "https://anilist.co/anime/11061", "because": "ONE PIECE"}, {"id": 1575, "title": "Code Geass: Lelouch of the Rebellion", "genres": ["Action", "Drama", "Mecha", "Sci-Fi", "Thriller"], "score": 85, "episodes": 25, "popularity": 492829, "year": 2006, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1575-hsmWM2ydNm1m.jpg", "url": "https://anilist.co/anime/1575", "because": "Attack on Titan Final Season"}, {"id": 101347, "title": "Dororo", "genres": ["Action", "Adventure", "Drama", "Supernatural"], "score": 81, "episodes": 24, "popularity": 370458, "year": 2019, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101347-TGaDwEYqLfm1.jpg", "url": "https://anilist.co/anime/101347", "because": "Demon Slayer: Kimetsu no Yaiba"}, {"id": 16498, "title": "Attack on Titan", "genres": ["Action", "Drama", "Fantasy", "Mystery"], "score": 85, "episodes": 25, "popularity": 1039934, "year": 2013, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx16498-buvcRTBx4NSm.jpg", "url": "https://anilist.co/anime/16498", "because": "Attack on Titan Final Season"}, {"id": 20, "title": "Naruto", "genres": ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Supernatural"], "score": 80, "episodes": 220, "popularity": 715603, "year": 2002, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20-dE6UHbFFg1A5.jpg", "url": "https://anilist.co/anime/20", "because": "ONE PIECE"}, {"id": 269, "title": "Bleach", "genres": ["Action", "Adventure", "Supernatural"], "score": 79, "episodes": 366, "popularity": 509242, "year": 2004, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx269-d2GmRkJbMopq.png", "url": "https://anilist.co/anime/269", "because": "ONE PIECE"}, {"id": 19, "title": "Monster", "genres": ["Drama", "Horror", "Mystery", "Psychological", "Thriller"], "score": 88, "episodes": 74, "popularity": 336066, "year": 2004, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx19-gtMC64182sm4.jpg", "url": "https://anilist.co/anime/19", "because": "Death Note"}, {"id": 20832, "title": "Overlord", "genres": ["Action", "Adventure", "Fantasy"], "score": 77, "episodes": 13, "popularity": 399295, "year": 2015, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20832-vUNm5zrYWifc.jpg", "url": "https://anilist.co/anime/20832", "because": "That Time I Got Reincarnated as a Slime"}, {"id": 106479, "title": "BOFURI: I Don't Want to Get Hurt, so I'll Max Out My Defense.", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Slice of Life"], "score": 73, "episodes": 12, "popularity": 179706, "year": 2020, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx106479-JmPk1F5ubMtm.png", "url": "https://anilist.co/anime/106479", "because": "That Time I Got Reincarnated as a Slime"}, {"id": 20623, "title": "Parasyte -the maxim-", "genres": ["Action", "Drama", "Horror", "Psychological", "Sci-Fi"], "score": 81, "episodes": 24, "popularity": 495532, "year": 2014, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20623-dUARfggnNDOe.jpg", "url": "https://anilist.co/anime/20623", "because": "JUJUTSU KAISEN"}, {"id": 103632, "title": "So I'm a Spider, So What?", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Mystery"], "score": 72, "episodes": 24, "popularity": 151617, "year": 2021, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx103632-2wsy9wFUdm1C.jpg", "url": "https://anilist.co/anime/103632", "because": "That Time I Got Reincarnated as a Slime"}, {"id": 1735, "title": "Naruto: Shippuden", "genres": ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Supernatural"], "score": 82, "episodes": 500, "popularity": 601870, "year": 2007, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1735-kGfVm0YqCPcu.png", "url": "https://anilist.co/anime/1735", "because": "ONE PIECE"}, {"id": 21234, "title": "ERASED", "genres": ["Drama", "Mystery", "Psychological", "Supernatural", "Thriller"], "score": 81, "episodes": 12, "popularity": 598780, "year": 2016, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21234-XmqW39aQ9o7O.jpg", "url": "https://anilist.co/anime/21234", "because": "Tokyo Revengers"}, {"id": 108511, "title": "That Time I Got Reincarnated as a Slime Season 2", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "score": 83, "episodes": 12, "popularity": 316184, "year": 2021, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx108511-PufFordLNyIb.jpg", "url": "https://anilist.co/anime/108511", "because": "The Rising of the Shield Hero"}, {"id": 151514, "title": "Orb: On the Movements of the Earth", "genres": ["Drama"], "score": 86, "episodes": 25, "popularity": 119609, "year": 2024, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx151514-Y0d82Ah2ZOHX.jpg", "url": "https://anilist.co/anime/151514", "because": "Vinland Saga"}, {"id": 6702, "title": "Fairy Tail", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "score": 72, "episodes": 175, "popularity": 375454, "year": 2009, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b6702-KI4qgSMyI8Pm.png", "url": "https://anilist.co/anime/6702", "because": "ONE PIECE"}, {"id": 113425, "title": "Redo of Healer", "genres": ["Action", "Adventure", "Ecchi", "Fantasy"], "score": 58, "episodes": 12, "popularity": 146840, "year": 2021, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx113425-tYGRUa5pgZje.jpg", "url": "https://anilist.co/anime/113425", "because": "The Rising of the Shield Hero"}, {"id": 3588, "title": "Soul Eater", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Supernatural"], "score": 77, "episodes": 51, "popularity": 387799, "year": 2008, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx3588-fSMggQoFSbUI.png", "url": "https://anilist.co/anime/3588", "because": "Fire Force"}, {"id": 20920, "title": "Is It Wrong to Try to Pick Up Girls in a Dungeon?", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Romance"], "score": 73, "episodes": 13, "popularity": 392552, "year": 2015, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20920-MTREwZOG4BAD.jpg", "url": "https://anilist.co/anime/20920", "because": "Tower of God"}, {"id": 2904, "title": "Code Geass: Lelouch of the Rebellion R2", "genres": ["Action", "Drama", "Mecha", "Sci-Fi", "Thriller"], "score": 87, "episodes": 25, "popularity": 358462, "year": 2008, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2904-Fet9Q33suC7G.jpg", "url": "https://anilist.co/anime/2904", "because": "Death Note"}, {"id": 130298, "title": "The Eminence in Shadow", "genres": ["Action", "Comedy", "Fantasy"], "score": 81, "episodes": 20, "popularity": 307463, "year": 2022, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx130298-YMdcKHytpWNH.jpg", "url": "https://anilist.co/anime/130298", "because": "That Time I Got Reincarnated as a Slime"}, {"id": 17265, "title": "Log Horizon", "genres": ["Action", "Adventure", "Fantasy"], "score": 76, "episodes": 25, "popularity": 235605, "year": 2013, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx17265-RyErURYesjJt.jpg", "url": "https://anilist.co/anime/17265", "because": "That Time I Got Reincarnated as a Slime"}, {"id": 142877, "title": "Rurouni Kenshin (2023)", "genres": ["Action", "Drama", "Romance"], "score": 74, "episodes": 24, "popularity": 60319, "year": 2023, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx142877-FrXXLsgXYQAp.jpg", "url": "https://anilist.co/anime/142877", "because": "Dragon Ball Super"}, {"id": 20755, "title": "Assassination Classroom", "genres": ["Action", "Comedy", "Drama", "Supernatural"], "score": 79, "episodes": 22, "popularity": 621592, "year": 2015, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20755-dWrhs569YGUO.jpg", "url": "https://anilist.co/anime/20755", "because": "My Hero Academia"}, {"id": 108268, "title": "Ascendance of a Bookworm", "genres": ["Fantasy", "Slice of Life"], "score": 78, "episodes": 14, "popularity": 116864, "year": 2019, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx108268-Dtt82uOi3vq5.jpg", "url": "https://anilist.co/anime/108268", "because": "Dr. STONE"}, {"id": 134732, "title": "Aoashi", "genres": ["Sports"], "score": 81, "episodes": 24, "popularity": 89185, "year": 2022, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx134732-OXKSrOhF9pCM.jpg", "url": "https://anilist.co/anime/134732", "because": "BLUE LOCK"}, {"id": 20447, "title": "Noragami", "genres": ["Action", "Adventure", "Comedy", "Supernatural"], "score": 78, "episodes": 12, "popularity": 534213, "year": 2014, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20447-EoQXeygHaVCK.jpg", "url": "https://anilist.co/anime/20447", "because": "JUJUTSU KAISEN"}, {"id": 21804, "title": "The Disastrous Life of Saiki K.", "genres": ["Comedy", "Slice of Life", "Supernatural"], "score": 83, "episodes": 120, "popularity": 353600, "year": 2016, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21804-As6tDLAvEvNY.jpg", "url": "https://anilist.co/anime/21804", "because": "MASHLE: MAGIC AND MUSCLES"}, {"id": 5114, "title": "Fullmetal Alchemist: Brotherhood", "genres": ["Action", "Adventure", "Drama", "Fantasy"], "score": 90, "episodes": 64, "popularity": 719122, "year": 2009, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx5114-nSWCgQlmOMtj.jpg", "url": "https://anilist.co/anime/5114", "because": "ONE PIECE"}, {"id": 153518, "title": "Delicious in Dungeon", "genres": ["Adventure", "Comedy", "Fantasy"], "score": 85, "episodes": 24, "popularity": 221095, "year": 2024, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx153518-IVXPDY5ph3kO.jpg", "url": "https://anilist.co/anime/153518", "because": "Witch Hat Atelier"}, {"id": 105156, "title": "Cautious Hero: The Hero Is Overpowered but Overly Cautious", "genres": ["Action", "Adventure", "Comedy", "Fantasy"], "score": 73, "episodes": 12, "popularity": 197430, "year": 2019, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx105156-ZVtxISdoUqnY.png", "url": "https://anilist.co/anime/105156", "because": "That Time I Got Reincarnated as a Slime"}, {"id": 141014, "title": "Tomodachi Game", "genres": ["Drama", "Mystery", "Psychological", "Thriller"], "score": 76, "episodes": 12, "popularity": 164269, "year": 2022, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx141014-bTWr7TtS0wt9.jpg", "url": "https://anilist.co/anime/141014", "because": "BLUE LOCK"}, {"id": 1818, "title": "Claymore", "genres": ["Action", "Adventure", "Fantasy", "Horror"], "score": 74, "episodes": 26, "popularity": 119478, "year": 2007, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1818-KieLJv0qo3mO.jpg", "url": "https://anilist.co/anime/1818", "because": "Vinland Saga"}, {"id": 104276, "title": "My Hero Academia Season 4", "genres": ["Action", "Adventure", "Comedy", "Drama", "Sci-Fi"], "score": 79, "episodes": 25, "popularity": 526892, "year": 2019, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx104276-SnEowMvesWIE.png", "url": "https://anilist.co/anime/104276", "because": "Black Clover"}, {"id": 223, "title": "Dragon Ball", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Sci-Fi", "Supernatural"], "score": 78, "episodes": 153, "popularity": 231289, "year": 1986, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx223-scE5uJfXqqj8.png", "url": "https://anilist.co/anime/223", "because": "ONE PIECE"}, {"id": 112151, "title": "Demon Slayer -Kimetsu no Yaiba- The Movie: Mugen Train", "genres": ["Action", "Adventure", "Drama", "Fantasy", "Mystery", "Supernatural"], "score": 84, "episodes": 1, "popularity": 502437, "year": 2020, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx112151-1qlQwPB1RrJe.png", "url": "https://anilist.co/anime/112151", "because": "My Hero Academia"}, {"id": 114124, "title": "Moriarty the Patriot", "genres": ["Drama", "Mystery", "Psychological", "Thriller"], "score": 81, "episodes": 11, "popularity": 155060, "year": 2020, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx114124-def92qPuIVeK.jpg", "url": "https://anilist.co/anime/114124", "because": "Death Note"}, {"id": 14813, "title": "My Teen Romantic Comedy SNAFU", "genres": ["Comedy", "Drama", "Romance", "Slice of Life"], "score": 78, "episodes": 13, "popularity": 376485, "year": 2013, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx14813-3mNvcKNEQcDs.jpg", "url": "https://anilist.co/anime/14813", "because": "Classroom of the Elite"}, {"id": 20661, "title": "Terror in Resonance", "genres": ["Drama", "Mystery", "Psychological", "Thriller"], "score": 78, "episodes": 11, "popularity": 287368, "year": 2014, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20661-aCR7QgzDfOSI.png", "url": "https://anilist.co/anime/20661", "because": "Death Note"}, {"id": 101338, "title": "Mob Psycho 100 II", "genres": ["Action", "Comedy", "Drama", "Psychological", "Slice of Life", "Supernatural"], "score": 87, "episodes": 13, "popularity": 444177, "year": 2019, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101338-rokVscjRYzdP.jpg", "url": "https://anilist.co/anime/101338", "because": "One-Punch Man"}, {"id": 116674, "title": "BLEACH: Thousand-Year Blood War", "genres": ["Action", "Adventure", "Supernatural"], "score": 88, "episodes": 13, "popularity": 201830, "year": 2022, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx116674-p3zK4PUX2Aag.jpg", "url": "https://anilist.co/anime/116674", "because": "ONE PIECE"}, {"id": 142329, "title": "Demon Slayer: Kimetsu no Yaiba Entertainment District Arc", "genres": ["Action", "Adventure", "Fantasy", "Supernatural"], "score": 86, "episodes": 11, "popularity": 476861, "year": 2021, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx142329-kET1PIXJv2eW.jpg", "url": "https://anilist.co/anime/142329", "because": "JUJUTSU KAISEN"}, {"id": 9253, "title": "Steins;Gate", "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"], "score": 89, "episodes": 24, "popularity": 587368, "year": 2011, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx9253-tIUXF2gfU8Sg.jpg", "url": "https://anilist.co/anime/9253", "because": "Tokyo Revengers"}, {"id": 21858, "title": "Little Witch Academia (TV)", "genres": ["Comedy", "Fantasy"], "score": 77, "episodes": 25, "popularity": 165668, "year": 2017, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21858-huBrbIOGMYXv.jpg", "url": "https://anilist.co/anime/21858", "because": "MASHLE: MAGIC AND MUSCLES"}, {"id": 98460, "title": "Devilman Crybaby", "genres": ["Action", "Drama", "Horror", "Psychological", "Supernatural"], "score": 76, "episodes": 10, "popularity": 348772, "year": 2018, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx98460-bLtH2c3jd6sV.png", "url": "https://anilist.co/anime/98460", "because": "Berserk"}, {"id": 813, "title": "Dragon Ball Z", "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Supernatural"], "score": 80, "episodes": 291, "popularity": 255885, "year": 1989, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx813-ZhnFNOeCU5dQ.png", "url": "https://anilist.co/anime/813", "because": "ONE PIECE"}, {"id": 126403, "title": "Link Click", "genres": ["Drama", "Mystery", "Supernatural", "Thriller"], "score": 86, "episodes": 11, "popularity": 171712, "year": 2021, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx126403-BfVSRzWUtVFW.png", "url": "https://anilist.co/anime/126403", "because": "Tokyo Revengers"}, {"id": 156092, "title": "To Be Hero X", "genres": ["Action", "Drama", "Mystery", "Supernatural"], "score": 85, "episodes": 24, "popularity": 123709, "year": 2025, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx156092-yHqgQZOF2mbg.jpg", "url": "https://anilist.co/anime/156092", "because": "One-Punch Man"}, {"id": 20458, "title": "The Irregular at Magic High School", "genres": ["Action", "Romance", "Sci-Fi", "Supernatural"], "score": 70, "episodes": 26, "popularity": 256924, "year": 2014, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx20458-tGh343Ew10yU.jpg", "url": "https://anilist.co/anime/20458", "because": "Classroom of the Elite"}, {"id": 154116, "title": "Undead Unluck", "genres": ["Action", "Comedy", "Sci-Fi", "Supernatural"], "score": 76, "episodes": 24, "popularity": 129712, "year": 2023, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154116-3ydDI9hhvPgw.png", "url": "https://anilist.co/anime/154116", "because": "Fire Force"}, {"id": 20931, "title": "Death Parade", "genres": ["Drama", "Mystery", "Psychological", "Supernatural", "Thriller"], "score": 80, "episodes": 12, "popularity": 462925, "year": 2015, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/nx20931-bktYqOcxPERi.jpg", "url": "https://anilist.co/anime/20931", "because": "Death Note"}, {"id": 392, "title": "Yu Yu Hakusho: Ghostfiles", "genres": ["Action", "Adventure", "Comedy", "Supernatural"], "score": 83, "episodes": 112, "popularity": 157165, "year": 1992, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx392-z90299zIvYmx.png", "url": "https://anilist.co/anime/392", "because": "JUJUTSU KAISEN"}, {"id": 136430, "title": "Vinland Saga Season 2", "genres": ["Action", "Adventure", "Drama"], "score": 88, "episodes": 24, "popularity": 269959, "year": 2023, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx136430-gsBsJjA7hGh9.jpg", "url": "https://anilist.co/anime/136430", "because": "Attack on Titan Final Season"}, {"id": 97938, "title": "Boruto: Naruto Next Generations", "genres": ["Action", "Adventure", "Fantasy"], "score": 57, "episodes": 293, "popularity": 223058, "year": 2017, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx97938-BnF6M5yTaNB1.jpg", "url": "https://anilist.co/anime/97938", "because": "My Hero Academia"}, {"id": 166610, "title": "MASHLE: MAGIC AND MUSCLES Season 2", "genres": ["Action", "Comedy", "Fantasy"], "score": 78, "episodes": 12, "popularity": 178727, "year": 2024, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx166610-S5q7V2v5zdDK.jpg", "url": "https://anilist.co/anime/166610", "because": "Wistoria: Wand and Sword"}, {"id": 98314, "title": "Kakegurui", "genres": ["Drama", "Mystery", "Psychological"], "score": 70, "episodes": 12, "popularity": 452075, "year": 2017, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b98314-TSJykxVwCCQN.jpg", "url": "https://anilist.co/anime/98314", "because": "BLUE LOCK"}, {"id": 140439, "title": "Mob Psycho 100 III", "genres": ["Action", "Comedy", "Drama", "Psychological", "Slice of Life", "Supernatural"], "score": 87, "episodes": 12, "popularity": 260318, "year": 2022, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx140439-bPKmhe1wNxc9.jpg", "url": "https://anilist.co/anime/140439", "because": "MASHLE: MAGIC AND MUSCLES"}, {"id": 114535, "title": "To Your Eternity", "genres": ["Adventure", "Drama", "Fantasy", "Psychological", "Supernatural"], "score": 81, "episodes": 20, "popularity": 313796, "year": 2021, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx114535-y3NnjexcqKG1.jpg", "url": "https://anilist.co/anime/114535", "because": "Dr. STONE"}, {"id": 99425, "title": "Promare", "genres": ["Action", "Mecha", "Sci-Fi"], "score": 77, "episodes": 1, "popularity": 108896, "year": 2019, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx99425-CQ500X23zp4i.png", "url": "https://anilist.co/anime/99425", "because": "Fire Force"}, {"id": 179966, "title": "Secrets of the Silent Witch", "genres": ["Drama", "Fantasy"], "score": 81, "episodes": 13, "popularity": 91954, "year": 2025, "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx179966-g0EU7rVe2Og7.jpg", "url": "https://anilist.co/anime/179966", "because": "Wistoria: Wand and Sword"}];
+const POPULAR = [{"id": 16498, "title": "Attack on Titan", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx16498-buvcRTBx4NSm.jpg"}, {"id": 101922, "title": "Demon Slayer: Kimetsu no Yaiba", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101922-WBsBl0ClmgYL.jpg"}, {"id": 113415, "title": "JUJUTSU KAISEN", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx113415-LHBAeoZDIsnF.jpg"}, {"id": 1535, "title": "Death Note", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1535-kUgkcrfOrkUM.jpg"}, {"id": 21459, "title": "My Hero Academia", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21459-nYh85uj2Fuwr.jpg"}, {"id": 11061, "title": "Hunter x Hunter (2011)", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx11061-y5gsT1hoHuHw.png"}, {"id": 21087, "title": "One-Punch Man", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21087-B5DHjqZ3kW4b.jpg"}, {"id": 21, "title": "ONE PIECE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21-ELSYx3yMPcKM.jpg"}, {"id": 20605, "title": "Tokyo Ghoul", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b20605-k665mVkSug8D.jpg"}, {"id": 20958, "title": "Attack on Titan Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20958-HuFJyr54Mmir.jpg"}, {"id": 5114, "title": "Fullmetal Alchemist: Brotherhood", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx5114-nSWCgQlmOMtj.jpg"}, {"id": 20, "title": "Naruto", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20-dE6UHbFFg1A5.jpg"}, {"id": 11757, "title": "Sword Art Online", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx11757-SxYDUzdr9rh2.jpg"}, {"id": 20954, "title": "A Silent Voice", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20954-sYRfE5jQRtSB.jpg"}, {"id": 21519, "title": "Your Name.", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21519-SUo3ZQuCbYhJ.png"}, {"id": 99147, "title": "Attack on Titan Season 3", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx99147-AiPDD8cwlCfi.jpg"}, {"id": 21856, "title": "My Hero Academia Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21856-gutauxhWAwn6.png"}, {"id": 110277, "title": "Attack on Titan Final Season", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx110277-sKUNXAsWMNFw.jpg"}, {"id": 101759, "title": "The Promised Neverland", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101759-8UR7r9MNVpz2.jpg"}, {"id": 20755, "title": "Assassination Classroom", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20755-dWrhs569YGUO.jpg"}, {"id": 127230, "title": "Chainsaw Man", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx127230-DdP4vAdssLoz.png"}, {"id": 21507, "title": "Mob Psycho 100", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21507-6YUSbh2m0N1p.jpg"}, {"id": 21355, "title": "Re:ZERO -Starting Life in Another World-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21355-wRVUrGxpvIQQ.jpg"}, {"id": 20665, "title": "Your lie in April", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20665-TLgkL8T8IRFd.png"}, {"id": 104578, "title": "Attack on Titan Season 3 Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx104578-k61nx3LPjvgd.jpg"}, {"id": 1735, "title": "Naruto: Shippuden", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1735-kGfVm0YqCPcu.png"}, {"id": 21234, "title": "ERASED", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21234-XmqW39aQ9o7O.jpg"}, {"id": 100166, "title": "My Hero Academia Season 3", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100166-jUCZYbzn2XLw.jpg"}, {"id": 9253, "title": "Steins;Gate", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx9253-tIUXF2gfU8Sg.jpg"}, {"id": 20464, "title": "HAIKYU!!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20464-ooZUyBe4ptp9.png"}, {"id": 97940, "title": "Black Clover", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx97940-fyh8o7gNbha0.png"}, {"id": 101291, "title": "Rascal Does Not Dream of Bunny Girl Senpai", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101291-wfEdgPqtfU0l.jpg"}, {"id": 140960, "title": "SPY x FAMILY", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx140960-Kb6R5nYQfjmP.jpg"}, {"id": 101921, "title": "Kaguya-sama: Love is War", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101921-ufrjLzhSz7L1.jpg"}, {"id": 105333, "title": "Dr. STONE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx105333-GybuoSoOZfpH.jpg"}, {"id": 21827, "title": "Violet Evergarden", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21827-ubzq619ZA2E9.png"}, {"id": 101348, "title": "Vinland Saga", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101348-2fhDFPCuMNiz.jpg"}, {"id": 19815, "title": "No Game, No Life", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b19815-sEOQ9yQaPKlk.jpg"}, {"id": 4224, "title": "Toradora!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx4224-PXVMBLNwy2aF.jpg"}, {"id": 20447, "title": "Noragami", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20447-EoQXeygHaVCK.jpg"}, {"id": 20613, "title": "Akame ga Kill!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20613-HXHpec4bemk5.jpg"}, {"id": 124080, "title": "Horimiya", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx124080-3i22mRVPBS0T.jpg"}, {"id": 104276, "title": "My Hero Academia Season 4", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx104276-SnEowMvesWIE.png"}, {"id": 20789, "title": "The Seven Deadly Sins", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20789-Ma5ouSYPkru9.jpg"}, {"id": 21202, "title": "KONOSUBA -God's blessing on this wonderful world!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21202-mPOr80AEjUcZ.png"}, {"id": 269, "title": "Bleach", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx269-d2GmRkJbMopq.png"}, {"id": 112151, "title": "Demon Slayer -Kimetsu no Yaiba- The Movie: Mugen Train", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx112151-1qlQwPB1RrJe.png"}, {"id": 20623, "title": "Parasyte -the maxim-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20623-dUARfggnNDOe.jpg"}, {"id": 99423, "title": "DARLING in the FRANXX", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx99423-8MBxtwCeHf8B.png"}, {"id": 1575, "title": "Code Geass: Lelouch of the Rebellion", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1575-hsmWM2ydNm1m.jpg"}, {"id": 30, "title": "Neon Genesis Evangelion", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx30-AI1zr74Dh4ye.jpg"}, {"id": 145064, "title": "JUJUTSU KAISEN Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx145064-hSNRJM03pvv1.jpg"}, {"id": 105310, "title": "Fire Force", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx105310-2PKUvoaA6fTn.jpg"}, {"id": 142329, "title": "Demon Slayer: Kimetsu no Yaiba Entertainment District Arc", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx142329-kET1PIXJv2eW.jpg"}, {"id": 199, "title": "Spirited Away", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx199-sWefXJvXkDOb.jpg"}, {"id": 14719, "title": "JoJo's Bizarre Adventure (TV)", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx14719-VT5dRzTBSZ0w.jpg"}, {"id": 154587, "title": "Frieren: Beyond Journey’s End", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx154587-qQTzQnEJJ3oB.jpg"}, {"id": 20931, "title": "Death Parade", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx20931-bktYqOcxPERi.jpg"}, {"id": 97668, "title": "One-Punch Man Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx97668-nC8gQrXVxt7k.png"}, {"id": 1, "title": "Cowboy Bebop", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1-GCsPm7waJ4kS.png"}, {"id": 9919, "title": "Blue Exorcist", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx9919-nXS7JOZrWHfS.jpg"}, {"id": 99263, "title": "The Rising of the Shield Hero", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx99263-LcazQwdlWzMy.jpg"}, {"id": 101280, "title": "That Time I Got Reincarnated as a Slime", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101280-tDxCVJm714nt.jpg"}, {"id": 98314, "title": "Kakegurui", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b98314-TSJykxVwCCQN.jpg"}, {"id": 108465, "title": "Mushoku Tensei: Jobless Reincarnation", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108465-1ANspF1EWyFx.jpg"}, {"id": 20594, "title": "Sword Art Online II", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx20594-FhRgZ1H9Istt.jpg"}, {"id": 101338, "title": "Mob Psycho 100 II", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101338-rokVscjRYzdP.jpg"}, {"id": 98659, "title": "Classroom of the Elite", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx98659-WNyPLIZDpGGY.jpg"}, {"id": 120120, "title": "Tokyo Revengers", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx120120-cWDmnmeEntSe.jpg"}, {"id": 6547, "title": "Angel Beats!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx6547-SYexAn5aFyss.png"}, {"id": 151807, "title": "Solo Leveling", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx151807-it355ZgzquUd.png"}, {"id": 131681, "title": "Attack on Titan Final Season Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx131681-5ooUqvqNtee1.jpg"}, {"id": 112641, "title": "Kaguya-sama: Love is War?", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx112641-zoGC8d6FaPXU.jpg"}, {"id": 131573, "title": "JUJUTSU KAISEN 0", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx131573-rpl82vDEDRm6.jpg"}, {"id": 20997, "title": "Charlotte", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20997-axVYrsIfjtYJ.jpg"}, {"id": 10620, "title": "The Future Diary", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx10620-dUZeNej0W4QN.png"}, {"id": 132405, "title": "My Dress-Up Darling", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx132405-qP7FQYGmNI3d.jpg"}, {"id": 21311, "title": "Bungo Stray Dogs", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21311-hAXyT8Yoh6G9.jpg"}, {"id": 18679, "title": "Kill la Kill", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b18679-lbkq7iYESoFW.png"}, {"id": 117193, "title": "My Hero Academia Season 5", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx117193-E75BlZmDh1aB.jpg"}, {"id": 20850, "title": "Tokyo Ghoul √A", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20850-glDf9EMKeCwe.jpg"}, {"id": 97986, "title": "Made in Abyss", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx97986-TQ7dCgbS3y5s.jpg"}, {"id": 20923, "title": "Food Wars!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20923-pNT38pjW3RFH.jpg"}, {"id": 20832, "title": "Overlord", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20832-vUNm5zrYWifc.jpg"}, {"id": 20992, "title": "HAIKYU!! 2nd Season", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20992-aHgNbcalVEqk.png"}, {"id": 15809, "title": "The Devil is a Part-Timer!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx15809-ECv3HyOYJKrk.jpg"}, {"id": 20920, "title": "Is It Wrong to Try to Pick Up Girls in a Dungeon?", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20920-MTREwZOG4BAD.jpg"}, {"id": 9989, "title": "Anohana: The Flower We Saw That Day", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx9989-hImMg6kCMm6I.jpg"}, {"id": 3588, "title": "Soul Eater", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx3588-fSMggQoFSbUI.png"}, {"id": 11111, "title": "Another", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx11111-gvvE5bBYsyFo.png"}, {"id": 120377, "title": "Cyberpunk: Edgerunners", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx120377-ayZPoxiWt4Li.jpg"}, {"id": 14813, "title": "My Teen Romantic Comedy SNAFU", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx14813-3mNvcKNEQcDs.jpg"}, {"id": 171018, "title": "DAN DA DAN", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx171018-60q1B6GK2Ghb.jpg"}, {"id": 6702, "title": "Fairy Tail", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b6702-KI4qgSMyI8Pm.png"}, {"id": 2001, "title": "Gurren Lagann", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2001-XwRnjzGeFWRQ.png"}, {"id": 108632, "title": "Re:ZERO -Starting Life in Another World- Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108632-lQWnmw7XaNOK.jpg"}, {"id": 21699, "title": "KONOSUBA -God's blessing on this wonderful world! 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21699-Fkbnkl9ZC6fW.png"}, {"id": 101347, "title": "Dororo", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101347-TGaDwEYqLfm1.jpg"}, {"id": 99750, "title": "I Want to Eat Your Pancreas", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx99750-pNyly9d3MEgV.jpg"}, {"id": 145139, "title": "Demon Slayer: Kimetsu no Yaiba Swordsmith Village Arc", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx145139-rRimpHGWLhym.png"}, {"id": 21170, "title": "Assassination Classroom Second Season", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21170-kbcfTTZGSaFt.jpg"}, {"id": 21698, "title": "HAIKYU!! 3rd Season", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21698-RL71mr1YU5Io.png"}, {"id": 431, "title": "Howl‘s Moving Castle", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx431-o8Lj3XkjHm2k.jpg"}, {"id": 2904, "title": "Code Geass: Lelouch of the Rebellion R2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2904-Fet9Q33suC7G.jpg"}, {"id": 129874, "title": "Demon Slayer: Kimetsu no Yaiba Mugen Train Arc", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx129874-g6ZKXB94Hui1.jpg"}, {"id": 128893, "title": "Hell’s Paradise", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx128893-Gc2t8b8M0mVu.jpg"}, {"id": 21804, "title": "The Disastrous Life of Saiki K.", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21804-As6tDLAvEvNY.jpg"}, {"id": 13601, "title": "PSYCHO-PASS", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx13601-i42VFuHpqEOJ.jpg"}, {"id": 106286, "title": "Weathering With You", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx106286-5COcpd0J9VbL.png"}, {"id": 14741, "title": "Love, Chunibyo & Other Delusions", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx14741-CGXEIeUe2roA.jpg"}, {"id": 98460, "title": "Devilman Crybaby", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx98460-bLtH2c3jd6sV.png"}, {"id": 12189, "title": "Hyouka", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx12189-zj5AWUYO53Fv.jpg"}, {"id": 10087, "title": "Fate/Zero", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx10087-M4Hd9qrHGrXk.png"}, {"id": 20474, "title": "JoJo's Bizarre Adventure: Stardust Crusaders", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20474-xuqem5GBlBtb.jpg"}, {"id": 5081, "title": "Bakemonogatari", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx5081-9GocceQ5Z865.jpg"}, {"id": 19, "title": "Monster", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx19-gtMC64182sm4.jpg"}, {"id": 115230, "title": "Tower of God", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx115230-QHOdSN7yt8ab.jpg"}, {"id": 113936, "title": "Dr. STONE: STONE WARS", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx113936-D4eYd4XwslVI.jpg"}, {"id": 21776, "title": "Miss Kobayashi's Dragon Maid", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21776-bwPaYKhnKfUs.png"}, {"id": 142838, "title": "SPY x FAMILY Cour 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx142838-26JrqcFU1ljB.jpg"}, {"id": 20829, "title": "Seraph of the End: Vampire Reign", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20829-pgsXVjrfyI5V.png"}, {"id": 99578, "title": "Wotakoi: Love is Hard for Otaku", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx99578-oO5KChtfhzln.png"}, {"id": 150672, "title": "OSHI NO KO", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx150672-WqmmwZ4nMzAy.png"}, {"id": 9756, "title": "Puella Magi Madoka Magica", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx9756-QnUGwlwwnsuN.jpg"}, {"id": 137822, "title": "BLUE LOCK", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx137822-U8naszP96vzC.png"}, {"id": 108725, "title": "The Promised Neverland Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108725-ZKivuyr4Jtc9.jpg"}, {"id": 127720, "title": "Mushoku Tensei: Jobless Reincarnation Cour 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx127720-ADJgIrUVMdU9.jpg"}, {"id": 116589, "title": "86 EIGHTY-SIX", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx116589-KawXHB6sApFt.jpg"}, {"id": 103572, "title": "The Quintessential Quintuplets", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx103572-cchriAdH95cQ.png"}, {"id": 133965, "title": "Komi Can’t Communicate", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx133965-9TZBS4m4yvED.png"}, {"id": 108511, "title": "That Time I Got Reincarnated as a Slime Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108511-PufFordLNyIb.jpg"}, {"id": 161645, "title": "The Apothecary Diaries", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx161645-QLbzHXiYRgV2.jpg"}, {"id": 114535, "title": "To Your Eternity", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx114535-y3NnjexcqKG1.jpg"}, {"id": 21450, "title": "JoJo's Bizarre Adventure: Diamond is Unbreakable", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21450-D7XFwEQjZ5GA.jpg"}, {"id": 11617, "title": "High School DxD", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx11617-nmxMU9Zh3H5R.jpg"}, {"id": 21128, "title": "Noragami Aragoto", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21128-eQgH3TG4nngo.jpg"}, {"id": 105334, "title": "Fruits Basket (2019)", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx105334-AZwEdMu4KFtV.jpg"}, {"id": 130298, "title": "The Eminence in Shadow", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx130298-YMdcKHytpWNH.jpg"}, {"id": 100388, "title": "BANANA FISH", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100388-hjkg1AnlJR5z.jpg"}, {"id": 113813, "title": "Rent-a-Girlfriend", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx113813-SnljeXpU3Pw7.jpg"}, {"id": 100240, "title": "Tokyo Ghoul:re", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx100240-vJNaKd5HwPJ2.jpg"}, {"id": 119661, "title": "Re:ZERO -Starting Life in Another World- Season 2 Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx119661-GDbUZxrZMz01.png"}, {"id": 176496, "title": "Solo Leveling Season 2 -Arise from the Shadow-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx176496-9BDMjAZGEbq4.png"}, {"id": 101165, "title": "GOBLIN SLAYER", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101165-v5NwPXWPFDuD.jpg"}, {"id": 164, "title": "Princess Mononoke", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx164-ySuGzCWVw2cL.jpg"}, {"id": 114236, "title": "Fire Force Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx114236-wfQOWF0Ii3h2.png"}, {"id": 102883, "title": "JoJo's Bizarre Adventure: Golden Wind", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx102883-S9KzdMJhDswJ.png"}, {"id": 116006, "title": "The God of High School", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx116006-Wt8JSA1ZQxlM.png"}, {"id": 2167, "title": "Clannad", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2167-pSDBcyc0vjej.jpg"}, {"id": 918, "title": "Gintama", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx918-iOaeBVUn4uK7.jpg"}, {"id": 6746, "title": "Durarara!!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx6746-3LTwM95Uqeoa.png"}, {"id": 106625, "title": "HAIKYU!! TO THE TOP", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx106625-UR22wB2NuNVi.png"}, {"id": 125367, "title": "Kaguya-sama: Love is War -Ultra Romantic-", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx125367-1yuq9NFcQuLI.png"}, {"id": 20799, "title": "JoJo's Bizarre Adventure: Stardust Crusaders - Battle in Egypt", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20799-S1eyqBDlx51E.jpg"}, {"id": 20661, "title": "Terror in Resonance", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20661-aCR7QgzDfOSI.png"}, {"id": 100182, "title": "Sword Art Online: Alicization", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx100182-KctPmCJ2smHQ.jpg"}, {"id": 7054, "title": "Maid-Sama!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx7054-GW4D7VAZG19W.png"}, {"id": 99539, "title": "The Seven Deadly Sins: Revival of the Commandments", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx99539-caPX28RSsgRP.jpg"}, {"id": 8074, "title": "High School of the Dead", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx8074-YB63Ik96fjPj.png"}, {"id": 151801, "title": "MASHLE: MAGIC AND MUSCLES", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx151801-XxVf22Le6C8o.png"}, {"id": 11771, "title": "Kuroko's Basketball", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx11771-uvr44RAwRxPw.jpg"}, {"id": 124845, "title": "WONDER EGG PRIORITY", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx124845-JXORhqCTGt04.jpg"}, {"id": 18153, "title": "Beyond the Boundary", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx18153-oDqA9zQzQPOq.png"}, {"id": 523, "title": "My Neighbor Totoro", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx523-fErBvxOHP7IX.jpg"}, {"id": 205, "title": "Samurai Champloo", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx205-7tHVFu6dPBm9.png"}, {"id": 141391, "title": "Call of the Night", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx141391-M3ZgUKTPENUk.jpg"}, {"id": 153288, "title": "Kaiju No. 8", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx153288-25FBfFJzEQ5O.jpg"}, {"id": 5680, "title": "K-ON!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx5680-r3AI3Cwfv0Aq.png"}, {"id": 13759, "title": "The Pet Girl of Sakurasou", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx13759-xNf0gJK4Axt2.jpg"}, {"id": 20698, "title": "My Teen Romantic Comedy SNAFU TOO!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20698-YZIYor2zW3Ta.png"}, {"id": 21613, "title": "Saga of Tanya the Evil", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21613-qT3NiwYP5dYc.png"}, {"id": 226, "title": "Elfen Lied", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx226-MibyRKhIrnTe.png"}, {"id": 166240, "title": "Demon Slayer: Kimetsu no Yaiba Hashira Training Arc", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx166240-PBV7zukIHW7V.png"}, {"id": 136430, "title": "Vinland Saga Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx136430-gsBsJjA7hGh9.jpg"}, {"id": 116742, "title": "That Time I Got Reincarnated as a Slime Season 2 Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx116742-jn0dW23ftehq.jpg"}, {"id": 18897, "title": "Nisekoi", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx18897-G2Fx2ZACsXBU.jpg"}, {"id": 139630, "title": "My Hero Academia Season 6", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx139630-3v4gxWtNZxLV.jpg"}, {"id": 120697, "title": "DON'T TOY WITH ME, MISS NAGATORO", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx120697-BA2TqxB1I5bJ.jpg"}, {"id": 112301, "title": "The Misfit of Demon King Academy: History’s Strongest Demon King Reincarnates and Goes to School with His Descendants", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx112301-f88Fs2es4pSr.jpg"}, {"id": 98437, "title": "Overlord II", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx98437-5q0GWqHhNAgJ.jpg"}, {"id": 121, "title": "Fullmetal Alchemist", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx121-zjmixZ428Mwv.png"}, {"id": 19603, "title": "Fate/stay night: Unlimited Blade Works", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx19603-ycT0pyEgDVQu.jpg"}, {"id": 17895, "title": "Golden Time", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx17895-M8yjOyMxHf5X.jpg"}, {"id": 130003, "title": "BOCCHI THE ROCK!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx130003-HTDmeL4RGeJ4.png"}, {"id": 140439, "title": "Mob Psycho 100 III", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx140439-bPKmhe1wNxc9.jpg"}, {"id": 14227, "title": "My Little Monster", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx14227-VGxPG1xDZG7v.jpg"}, {"id": 21518, "title": "Food Wars! The Second Plate", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21518-uBqzDGIuSxJ5.jpg"}, {"id": 4898, "title": "Black Butler", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx4898-mW4gabZvwmLC.jpg"}, {"id": 145545, "title": "Classroom of the Elite Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx145545-DGl3LVvFlnHi.png"}, {"id": 104157, "title": "Rascal Does Not Dream of a Dreaming Girl", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx104157-rk99XI56PaIC.jpg"}, {"id": 20458, "title": "The Irregular at Magic High School", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20458-tGh343Ew10yU.jpg"}, {"id": 146065, "title": "Mushoku Tensei: Jobless Reincarnation Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx146065-IjirxRK26O03.png"}, {"id": 107660, "title": "BEASTARS", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx107660-hgknnyaLchJW.png"}, {"id": 21049, "title": "ReLIFE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21049-4AHSLeiDE9eg.png"}, {"id": 20872, "title": "Plastic Memories", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20872-j5PBzzVtrYDM.jpg"}, {"id": 813, "title": "Dragon Ball Z", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx813-ZhnFNOeCU5dQ.png"}, {"id": 853, "title": "Ouran High School Host Club", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx853-fiUtW8yohsSF.jpg"}, {"id": 113538, "title": "HAIKYU!! TO THE TOP Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx113538-tHVE8j5mOPLu.jpg"}, {"id": 32, "title": "Neon Genesis Evangelion: The End of Evangelion", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx32-5JYsv0wc122I.jpg"}, {"id": 339, "title": "Serial Experiments Lain", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx339-xF2wp1NQuQ4r.png"}, {"id": 889, "title": "Black Lagoon", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx889-4S7N2ciq2cwA.png"}, {"id": 172463, "title": "JUJUTSU KAISEN Season 3: The Culling Game Part 1", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx172463-LnXqHzt74SJL.jpg"}, {"id": 6880, "title": "Deadman Wonderland", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx6880-qZ1jIqIYpST2.png"}, {"id": 1689, "title": "5 Centimeters per Second", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1689-rJKhjLEjQHSy.jpg"}, {"id": 178025, "title": "Gachiakuta", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx178025-cWJKEsZynkil.jpg"}, {"id": 6045, "title": "Kimi ni Todoke: From Me to You", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx6045-JujXjoWtslUM.jpg"}, {"id": 146984, "title": "Attack on Titan Final Season THE FINAL CHAPTERS Special 1", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx146984-GXrLeT6vQqyP.jpg"}, {"id": 16782, "title": "The Garden of Words", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx16782-qpFGk18UqaHn.jpg"}, {"id": 20807, "title": "Prison School", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20807-8nFoO0AUdGsy.jpg"}, {"id": 15583, "title": "Date A Live", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx15583-Sxd2J4RJdRhj.jpg"}, {"id": 101474, "title": "Overlord III", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101474-tGRyvSAWMjU9.jpg"}, {"id": 98436, "title": "The Ancient Magus' Bride", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx98436-n7sK6POCd0XV.png"}, {"id": 116267, "title": "TONIKAWA: Over The Moon For You", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx116267-Eo1biPBTlL4i.jpg"}, {"id": 111321, "title": "The Rising of the Shield Hero Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx111321-dIr3dEKOIPer.png"}, {"id": 20596, "title": "Blue Spring Ride", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20596-fJdMHV8xRMgY.png"}, {"id": 21092, "title": "Chivalry of a Failed Knight", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx21092-1NML6TdngmBq.jpg"}, {"id": 437, "title": "Perfect Blue", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx437-69NMlXKFeuse.jpg"}, {"id": 101167, "title": "Is It Wrong to Try to Pick Up Girls in a Dungeon? II", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101167-Yasvj97UR9ue.png"}, {"id": 21857, "title": "Masamune-kun's Revenge", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx21857-haPDVD7DKDpg.jpg"}, {"id": 11741, "title": "Fate/Zero Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx11741-oEy1fJHYm2zJ.jpg"}, {"id": 102976, "title": "KONOSUBA -God's blessing on this wonderful world!- Legend of Crimson", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx102976-2Yi5icRbjukO.png"}, {"id": 10793, "title": "Guilty Crown", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx10793-KCysCbrVNqK9.jpg"}, {"id": 10165, "title": "Nichijou - My Ordinary Life", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx10165-tw8Cz7K9tfVJ.png"}, {"id": 159831, "title": "Zom 100: Bucket List of the Dead", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx159831-cJUNqCqzuApc.png"}, {"id": 21679, "title": "Bungo Stray Dogs 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21679-9MKdz1A7YLV7.jpg"}, {"id": 108463, "title": "Toilet-bound Hanako-kun", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108463-u03vrYnyB3L9.jpg"}, {"id": 100876, "title": "Kakegurui xx", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100876-RfvmpW1B8bDQ.png"}, {"id": 17265, "title": "Log Horizon", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx17265-RyErURYesjJt.jpg"}, {"id": 102351, "title": "Tokyo Ghoul:re 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx102351-yD3Ty9YZFMsf.jpg"}, {"id": 158927, "title": "SPY x FAMILY Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b158927-lfO85WVguYgc.png"}, {"id": 21647, "title": "Orange", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21647-zMUXNhcVyRyv.png"}, {"id": 124153, "title": "SK8 the Infinity", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx124153-uEBI764OSavB.png"}, {"id": 100922, "title": "Grand Blue Dreaming", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100922-uxEhaCsqMMp3.png"}, {"id": 16592, "title": "Danganronpa: The Animation", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx16592-mFn1gfMXlKtw.jpg"}, {"id": 223, "title": "Dragon Ball", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx223-scE5uJfXqqj8.png"}, {"id": 14513, "title": "Magi: The Labyrinth of Magic", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx14513-HuUdrFFYftA7.jpg"}, {"id": 21709, "title": "Yuri!!! on ICE", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21709-aqPBDxJPruYR.png"}, {"id": 109261, "title": "The Quintessential Quintuplets 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx109261-65rKxMDlcU9r.png"}, {"id": 110349, "title": "Great Pretender", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx110349-59hhZ9CNHVdk.png"}, {"id": 21875, "title": "No Game, No Life Zero", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx21875-ybSgx75MgRMM.png"}, {"id": 47, "title": "Akira", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx47-4CR68arv452h.jpg"}, {"id": 171627, "title": "Chainsaw Man – The Movie: Reze Arc", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx171627-ZN9D7P46yHnw.png"}, {"id": 20727, "title": "Blood Blockade Battlefront", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20727-jgVnxLCHAKqZ.jpg"}, {"id": 100668, "title": "Arifureta: From Commonplace to World's Strongest", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100668-DvOn5bMOt4cy.jpg"}, {"id": 99255, "title": "Food Wars! The Third Plate", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx99255-heGTtj5b4owl.jpg"}, {"id": 97938, "title": "Boruto: Naruto Next Generations", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx97938-BnF6M5yTaNB1.jpg"}, {"id": 129201, "title": "Summer Time Rendering", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx129201-HJBauga2be8I.png"}, {"id": 108489, "title": "My Teen Romantic Comedy SNAFU Climax!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108489-yGmYCE6dhFta.png"}, {"id": 113717, "title": "Ranking of Kings", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx113717-9sNnN8WRgK15.jpg"}, {"id": 20668, "title": "Monthly Girls' Nozaki-kun", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20668-6UslJY5NDYNh.png"}, {"id": 153518, "title": "Delicious in Dungeon", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx153518-IVXPDY5ph3kO.jpg"}, {"id": 4181, "title": "Clannad: After Story", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx4181-zUKE7BZC62OF.png"}, {"id": 185660, "title": "DAN DA DAN Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx185660-uB8RUMBGovGr.jpg"}, {"id": 103139, "title": "Domestic Girlfriend", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx103139-2TfvRyGTE1qp.jpg"}, {"id": 100723, "title": "My Hero Academia: Two Heroes", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100723-7f5e1BCTCDoB.jpg"}, {"id": 21127, "title": "Steins;Gate 0", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21127-7ARWZkDXKiiD.jpg"}, {"id": 108759, "title": "Sword Art Online: Alicization - War of Underworld", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108759-jcXbDf9BJTcb.jpg"}, {"id": 182255, "title": "Frieren: Beyond Journey’s End Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx182255-butzrqd4I0aC.jpg"}, {"id": 99629, "title": "Angels of Death", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx99629-BXyAJ6PDq4sr.jpg"}, {"id": 177709, "title": "SAKAMOTO DAYS", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx177709-e5Qx6RlsBgD5.png"}, {"id": 20770, "title": "Yona of the Dawn", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20770-brCDvhTXlums.png"}, {"id": 21175, "title": "Dragon Ball Super", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21175-EH06qlfF8TnB.jpg"}, {"id": 147105, "title": "Witch Hat Atelier", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx147105-rwOX8qyUy8gV.jpg"}, {"id": 127911, "title": "Shikimori's Not Just a Cutie", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx127911-qfJDzUt0qCna.jpg"}, {"id": 21366, "title": "March comes in like a lion", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21366-0wrYK0kjKeFn.jpg"}, {"id": 155783, "title": "Tengoku Daimakyo", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx155783-YosKbsmZzuDE.jpg"}, {"id": 108430, "title": "given", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108430-UdruJPro4vDK.jpg"}, {"id": 143270, "title": "Lycoris Recoil", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx143270-rfkyiYXhek5w.jpg"}, {"id": 131646, "title": "The Case Study of Vanitas", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx131646-cuyGfKcekZ62.jpg"}, {"id": 20910, "title": "SHIMONETA: A Boring World Where the Concept of Dirty Jokes Doesn’t Exist", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20910-U7txwG3o9gma.jpg"}, {"id": 227, "title": "FLCL", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx227-qOB9ZhVvNnqO.jpg"}, {"id": 877, "title": "NANA", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx877-6BUYEWp8By8j.png"}, {"id": 101004, "title": "How NOT to Summon a Demon Lord", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx101004-rJLBIWGypbYK.png"}, {"id": 20792, "title": "Fate/stay night: Unlimited Blade Works 2nd Season", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20792-Q53sZsUAh5FF.jpg"}, {"id": 166873, "title": "Mushoku Tensei: Jobless Reincarnation Season 2 Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx166873-xO0BRPkmwFll.png"}, {"id": 116674, "title": "BLEACH: Thousand-Year Blood War", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx116674-p3zK4PUX2Aag.jpg"}, {"id": 181444, "title": "The Fragrant Flower Blooms With Dignity", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx181444-Ut9DDUZdfHwg.jpg"}, {"id": 154965, "title": "My Love Story with Yamada-kun at Lv999", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx154965-vZbBRjtmLp7S.jpg"}, {"id": 100977, "title": "Cells at Work!", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx100977-nH1J2dR7GGAk.jpg"}, {"id": 108928, "title": "The Seven Deadly Sins: Imperial Wrath of the Gods", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx108928-DuyUzi0JyPIr.jpg"}, {"id": 21421, "title": "Kiznaiver", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21421-5y8ryXsMB7aJ.jpg"}, {"id": 578, "title": "Grave of the Fireflies", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx578-vU6XcOlb1XFU.jpg"}, {"id": 1210, "title": "Welcome to the N-H-K", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx1210-2XotjcgqdcaX.jpg"}, {"id": 129898, "title": "The World's Finest Assassin Gets Reincarnated in Another World as an Aristocrat", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx129898-FRUzDtPhRigt.jpg"}, {"id": 131518, "title": "Dr. STONE New World", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx131518-RU7RoUmGb2sP.jpg"}, {"id": 162804, "title": "Alya Sometimes Hides Her Feelings in Russian", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx162804-TBeptcAfvqTd.jpg"}, {"id": 849, "title": "The Melancholy of Haruhi Suzumiya", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx849-wQM3GqLvl62P.png"}, {"id": 103047, "title": "Violet Evergarden: the Movie", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx103047-odblDHHEdehK.jpg"}, {"id": 21700, "title": "Akashic Records of Bastard Magic Instructor", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21700-HhTEXPZKxupP.jpg"}, {"id": 112124, "title": "Is It Wrong to Try to Pick Up Girls in a Dungeon? III", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx112124-ZmoOntBuiSUU.jpg"}, {"id": 142770, "title": "Suzume", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx142770-dDaDIRnsv5jN.jpg"}, {"id": 105156, "title": "Cautious Hero: The Hero Is Overpowered but Overly Cautious", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx105156-ZVtxISdoUqnY.png"}, {"id": 176301, "title": "The Apothecary Diaries Season 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx176301-TIGmldLffQGX.jpg"}, {"id": 21711, "title": "91 Days", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx21711-EQN4sCIXRhKf.png"}, {"id": 103223, "title": "Bungo Stray Dogs 3", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx103223-bfdnnKWxE4YE.jpg"}, {"id": 20993, "title": "Seraph of the End: Battle in Nagoya", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20993-c34UTma2bCcv.jpg"}, {"id": 20631, "title": "TRINITY SEVEN", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20631-LdCiy3goitcT.png"}, {"id": 20994, "title": "Gate", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx20994-pSDk4I58jAK5.jpg"}, {"id": 15451, "title": "High School DxD NEW", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/nx15451-A5T54vmxUq9t.jpg"}, {"id": 114308, "title": "Sword Art Online: Alicization - War of Underworld Part 2", "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx114308-8UBiS7U9buzu.jpg"}];
+
+const API = "https://graphql.anilist.co";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ================= etat persistant =================
+   Trois choses vivent dans le navigateur : les series ecartees, les notes,
+   et les series ajoutees a la main (vues ailleurs que sur Crunchyroll).   */
+const KEYS = {
+  seen:   "anime_veille_seen",
+  rating: "anime_veille_ratings",
+  added:  "anime_veille_added",
+  cache:  "anime_veille_reco_cache",
+};
+
+const read = (key, fallback) => {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+};
+const write = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
+let SEEN    = new Set(read(KEYS.seen, []));
+let RATINGS = read(KEYS.rating, {});      // { anilistId: 1..5 }
+let ADDED   = read(KEYS.added, []);       // series ajoutees a la main
+
+const CR_SEEN = new Set(PROFILE.series.map(s => s.anilist_id));
+const isSeen = id => CR_SEEN.has(id) || SEEN.has(id) || ADDED.some(a => a.id === id);
+
+/* La liste complete = historique Crunchyroll + ajouts manuels. */
+function myList() {
+  const fromCR = PROFILE.series.map(s => ({
+    id: s.anilist_id,
+    title: s.title_english || s.title_romaji,
+    cover: s.cover,
+    genres: s.genres || [],
+    episodes: s.watched_episodes,
+    last: s.last_watched,
+    source: "cr",
+  }));
+  const manual = ADDED.map(a => ({ ...a, source: "manuel" }));
+  return [...fromCR, ...manual];
+}
+
+/* ================= navigation ================= */
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b === btn));
+    document.querySelectorAll("section").forEach(s =>
+      s.classList.toggle("on", s.id === "tab-" + btn.dataset.tab));
+    window.scrollTo(0, 0);
+  };
+});
+
+function badge(id, n) {
+  const el = $("b-" + id);
+  if (n > 0) { el.textContent = n; el.hidden = false; } else { el.hidden = true; }
+}
+
+/* ================= helpers ================= */
+function countdown(seconds) {
+  if (seconds == null) return "";
+  const d = Math.floor(seconds / 86400), h = Math.floor((seconds % 86400) / 3600), m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `dans ${d} j ${h} h`;
+  if (h > 0) return `dans ${h} h ${m} min`;
+  return `dans ${m} min`;
+}
+
+function dayLabel(ts) {
+  const date = new Date(ts * 1000), now = new Date();
+  const j = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((j - t) / 86400000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return "Demain";
+  const s = date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const hour = ts => new Date(ts * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+function card({ url, cover, title, meta, genres, foot, dismissId }) {
+  return `<div class="card-wrap">
+    <a class="card" href="${esc(url || "#")}" target="_blank" rel="noopener">
+      <img src="${esc(cover || "")}" alt="" loading="lazy">
+      <div class="body">
+        <div class="title">${esc(title)}</div>
+        ${meta ? `<div class="meta">${meta}</div>` : ""}
+        ${genres ? `<div class="genres">${esc(genres)}</div>` : ""}
+        ${foot ? `<div class="foot">${foot}</div>` : ""}
+      </div>
+    </a>
+    ${dismissId ? `<button class="dismiss" data-seen="${dismissId}">déjà vu</button>` : ""}
+  </div>`;
+}
+
+const empty = msg => `<div class="empty">${esc(msg)}</div>`;
+
+function starsHtml(id) {
+  const r = RATINGS[id] || 0;
+  let out = `<span class="stars" data-rate="${id}">`;
+  for (let i = 1; i <= 5; i++) out += `<button data-star="${i}" class="${i <= r ? "lit" : ""}">★</button>`;
+  out += `</span>`;
+  if (r) out += `<span class="rated-note">${["", "à éviter", "bof", "correct", "très bien", "coup de cœur"][r]}</span>`;
+  return out;
+}
+
+/* ================= AniList ================= */
+async function gql(query, variables) {
+  const r = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ query, variables })
+  });
+  if (r.status === 429) throw new Error("trop de requêtes, patiente une minute");
+  if (!r.ok) throw new Error("AniList a répondu " + r.status);
+  const j = await r.json();
+  if (j.errors) throw new Error(j.errors[0].message);
+  return j.data;
+}
+
+const Q_LIVE = `query ($ids: [Int]) {
+  Page(page: 1, perPage: 50) {
+    media(id_in: $ids, type: ANIME) {
+      id status episodes title { romaji english } coverImage { large } siteUrl
+      nextAiringEpisode { episode airingAt timeUntilAiring }
+    }
+  }
+}`;
+
+const Q_SAISON = `query ($season: MediaSeason, $year: Int) {
+  Page(page: 1, perPage: 40) {
+    media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+      id genres averageScore episodes format title { romaji english }
+      coverImage { large } siteUrl
+    }
+  }
+}`;
+
+const Q_SEARCH = `query ($s: String) {
+  Page(page: 1, perPage: 8) {
+    media(search: $s, type: ANIME, sort: SEARCH_MATCH, isAdult: false) {
+      id genres averageScore episodes title { romaji english }
+      coverImage { large } siteUrl startDate { year }
+    }
+  }
+}`;
+
+/* Plusieurs series en une seule requete grace aux alias GraphQL :
+   20 sources coutent 3 appels au lieu de 20.                        */
+function buildRecoQuery(ids) {
+  const frag = `id title { romaji english } genres averageScore episodes format
+    popularity siteUrl coverImage { large } startDate { year }`;
+  const parts = ids.map((id, i) => `
+    s${i}: Media(id: ${id}) {
+      title { romaji english }
+      recommendations(sort: RATING_DESC, perPage: 14) {
+        nodes { rating mediaRecommendation { ${frag} } }
+      }
+    }`);
+  return `query { ${parts.join("\n")} }`;
+}
+
+function currentSeason() {
+  const m = new Date().getMonth() + 1, y = new Date().getFullYear();
+  if (m <= 3) return { season: "WINTER", year: y, label: "hiver" };
+  if (m <= 6) return { season: "SPRING", year: y, label: "printemps" };
+  if (m <= 9) return { season: "SUMMER", year: y, label: "été" };
+  return { season: "FALL", year: y, label: "automne" };
+}
+
+/* ================= moteur de suggestions =================
+   Pondere chaque serie source par la note donnee. Une note basse joue
+   a l'envers : elle ecarte ce qui ressemble a ce qu'il n'a pas aime.  */
+const WEIGHT = { 1: -1.4, 2: -0.6, 3: 0.6, 4: 2.0, 5: 3.2 };
+
+function sourceWeights() {
+  const list = myList();
+  const maxEpisodes = Math.max(...list.map(s => s.episodes || 0), 1);
+  const weighted = list.map(s => {
+    const rated = RATINGS[s.id];
+    // Sans note, on retombe sur le signal faible du volume regarde.
+    const w = rated ? WEIGHT[rated] : Math.min((s.episodes || 0) / maxEpisodes, 1) * 0.9;
+    return { ...s, weight: w };
+  });
+  const positives = weighted.filter(s => s.weight > 0).sort((a, b) => b.weight - a.weight).slice(0, 20);
+  const negatives = weighted.filter(s => s.weight < 0).slice(0, 6);
+  return { positives, negatives, ratedCount: Object.keys(RATINGS).length };
+}
+
+function ratingsFingerprint() {
+  return JSON.stringify([Object.entries(RATINGS).sort(), ADDED.map(a => a.id).sort()]);
+}
+
+async function computeRecos({ force = false } = {}) {
+  const fingerprint = ratingsFingerprint();
+  const cached = read(KEYS.cache, null);
+  if (!force && cached && cached.fingerprint === fingerprint && cached.items?.length) {
+    return { items: cached.items, cached: true, ratedCount: Object.keys(RATINGS).length };
+  }
+
+  const { positives, negatives, ratedCount } = sourceWeights();
+  const sources = [...positives, ...negatives];
+  if (!sources.length) return { items: [], cached: false, ratedCount };
+
+  const scores = {}, info = {}, because = {};
+  for (let i = 0; i < sources.length; i += 8) {
+    const chunk = sources.slice(i, i + 8);
+    const data = await gql(buildRecoQuery(chunk.map(s => s.id)), {});
+    chunk.forEach((src, k) => {
+      const node = data["s" + k];
+      if (!node) return;
+      for (const rec of node.recommendations.nodes) {
+        const m = rec.mediaRecommendation;
+        if (!m || isSeen(m.id) || SEEN.has(m.id)) continue;
+        if (["MUSIC", "SPECIAL"].includes(m.format)) continue;
+
+        const rating = Math.max(rec.rating || 0, 0) + 1;
+        const damp = Math.log10(Math.max(m.popularity || 1000, 100));
+        const year = m.startDate?.year || 2000;
+        const nowY = new Date().getFullYear();
+        const fresh = year >= nowY - 2 ? 1.6 : (year >= nowY - 5 ? 1.2 : 1.0);
+
+        scores[m.id] = (scores[m.id] || 0) + (rating / damp) * fresh * src.weight;
+        info[m.id] = m;
+        if (src.weight > 0 && !because[m.id]) because[m.id] = src.title;
+      }
+    });
+  }
+
+  const items = Object.entries(scores)
+    .filter(([, sc]) => sc > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 40)
+    .map(([id]) => {
+      const m = info[id];
+      return {
+        id: Number(id),
+        title: m.title.english || m.title.romaji,
+        genres: m.genres || [],
+        score: m.averageScore,
+        episodes: m.episodes,
+        year: m.startDate?.year,
+        cover: m.coverImage?.large,
+        url: m.siteUrl,
+        because: because[id] || "tes séries",
+      };
+    });
+
+  write(KEYS.cache, { fingerprint, at: Date.now(), items });
+  return { items, cached: false, ratedCount };
+}
+
+/* ================= rendus ================= */
+function renderSemaine(live) {
+  const rows = [];
+  for (const s of PROFILE.series) {
+    const m = live[s.anilist_id];
+    if (m?.nextAiringEpisode) rows.push({ m, at: m.nextAiringEpisode.airingAt });
+  }
+  rows.sort((a, b) => a.at - b.at);
+  badge("semaine", rows.filter(r => r.at - Date.now() / 1000 < 7 * 86400).length);
+  if (!rows.length) return empty("Aucune de tes séries n'a d'épisode programmé.");
+
+  // Regroupe par jour, chaque groupe etant lui-meme une grille a deux colonnes.
+  let html = "", lastDay = null, open = false;
+  for (const { m } of rows) {
+    const n = m.nextAiringEpisode;
+    const day = dayLabel(n.airingAt);
+    if (day !== lastDay) {
+      if (open) html += `</div>`;
+      html += `<div class="day-head">${esc(day)}</div><div class="grid">`;
+      lastDay = day; open = true;
+    }
+    html += card({
+      url: m.siteUrl, cover: m.coverImage?.large,
+      title: m.title.english || m.title.romaji,
+      meta: `Épisode ${n.episode} · ${hour(n.airingAt)}`,
+      foot: `<span class="pill ${n.timeUntilAiring < 86400 ? "today" : "soon"}">${countdown(n.timeUntilAiring)}</span>`
+    });
+  }
+  if (open) html += `</div>`;
+  return html;
+}
+
+function renderRetard(live) {
+  const rows = [];
+  for (const s of PROFILE.series) {
+    const m = live[s.anilist_id];
+    if (!m) continue;
+    const aired = m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : (m.episodes ?? 0);
+    const seen = Math.floor(s.max_episode_seen || 0);
+    const behind = aired - seen;
+    // Garde-fou : Crunchyroll numerote parfois en continu la ou AniList
+    // decoupe en saisons. Au-dela d'un ecart absurde, on n'affiche rien.
+    if (behind > 0 && seen > 0 && seen <= aired * 1.5) rows.push({ m, behind, aired, seen });
+  }
+  rows.sort((a, b) => b.behind - a.behind);
+  badge("retard", rows.length);
+  if (!rows.length) return empty("Tu es à jour partout. Rare, profite.");
+
+  return `<div class="grid">` + rows.map(({ m, behind, aired, seen }) => card({
+    url: m.siteUrl, cover: m.coverImage?.large,
+    title: m.title.english || m.title.romaji,
+    meta: `Épisode ${seen} sur ${aired} sortis`,
+    foot: `<span class="pill late">${behind} de retard</span>`
+  })).join("") + `</div>`;
+}
+
+function renderSuites() {
+  const rows = [];
+  for (const s of PROFILE.series) {
+    for (const q of (s.sequels || [])) {
+      if (CR_SEEN.has(q.id)) continue;
+      if (!["NOT_YET_RELEASED", "RELEASING"].includes(q.status)) continue;
+      rows.push({ parent: s, q });
+    }
+  }
+  rows.sort((a, b) => (a.q.year || 9999) - (b.q.year || 9999));
+  badge("suites", rows.length);
+  if (!rows.length) return empty("Aucune suite annoncée pour l'instant sur tes séries.");
+
+  return `<div class="grid">` + rows.map(({ parent, q }) => card({
+    url: q.url, cover: parent.cover,
+    title: q.title,
+    meta: `Suite de ${parent.title_english || parent.title_romaji}`,
+    foot: q.status === "RELEASING"
+      ? `<span class="pill ok">En cours</span>`
+      : `<span class="pill new">${q.year || "date inconnue"}</span>`
+  })).join("") + `</div>`;
+}
+
+function renderPourToi(items, meta) {
+  const list = (items || []).filter(r => !SEEN.has(r.id));
+  const rated = meta?.ratedCount ?? Object.keys(RATINGS).length;
+  $("reco-info").textContent = rated
+    ? `Calculé sur ${rated} série${rated > 1 ? "s" : ""} notée${rated > 1 ? "s" : ""}.`
+    : "Aucune note pour l'instant : calcul basé sur ce que tu as le plus regardé. Note tes séries dans l'onglet Ma liste.";
+  if (!list.length) return empty("Rien à proposer. Note quelques séries puis recalcule.");
+
+  return `<div class="grid">` + list.map(r => card({
+    url: r.url, cover: r.cover,
+    title: r.title,
+    meta: `Car tu as aimé ${esc(r.because)}`,
+    genres: [(r.genres || []).slice(0, 2).join(" · "), r.year].filter(Boolean).join(" · "),
+    foot: `${r.score ? `<span class="score">${r.score}%</span> ` : ""}<span class="pill">${r.episodes || "?"} ép.</span>`,
+    dismissId: r.id
+  })).join("") + `</div>`;
+}
+
+let LAST_SEASON = null;
+function renderSaison(list) {
+  if (list) LAST_SEASON = list;
+  const source = LAST_SEASON || [];
+  const taste = {};
+  for (const s of myList()) {
+    const boost = RATINGS[s.id] ? WEIGHT[RATINGS[s.id]] : 0.4;
+    for (const g of (s.genres || [])) taste[g] = (taste[g] || 0) + boost;
+  }
+  const scored = source
+    .filter(m => !isSeen(m.id) && !SEEN.has(m.id))
+    .map(m => ({ m, fit: (m.genres || []).reduce((a, g) => a + (taste[g] || 0), 0) }))
+    .sort((a, b) => b.fit - a.fit || (b.m.averageScore || 0) - (a.m.averageScore || 0));
+  if (!scored.length) return empty("Rien de nouveau trouvé pour cette saison.");
+
+  return `<div class="grid">` + scored.slice(0, 24).map(({ m, fit }) => card({
+    url: m.siteUrl, cover: m.coverImage?.large,
+    title: m.title.english || m.title.romaji,
+    meta: (m.genres || []).slice(0, 3).join(" · "),
+    foot: `${m.averageScore ? `<span class="score">${m.averageScore}%</span> ` : ""}${fit > 0 ? `<span class="pill soon">Dans tes goûts</span>` : ""}`,
+    dismissId: m.id
+  })).join("") + `</div>`;
+}
+
+function renderMaListe() {
+  const list = myList().sort((a, b) => {
+    const ra = RATINGS[a.id] || 0, rb = RATINGS[b.id] || 0;
+    if (ra !== rb) return rb - ra;
+    return String(b.last || "").localeCompare(String(a.last || ""));
+  });
+  const rated = Object.keys(RATINGS).length;
+  $("list-info").textContent =
+    `${list.length} séries · ${rated} notée${rated > 1 ? "s" : ""}` +
+    (ADDED.length ? ` · ${ADDED.length} ajoutée${ADDED.length > 1 ? "s" : ""} à la main` : "");
+
+  return `<div class="list-grid">` + list.map(s => `<div class="card-wrap list-row">
+    <div class="card">
+      <img src="${esc(s.cover || "")}" alt="" loading="lazy">
+      <div class="body">
+        <div class="title">${esc(s.title)}</div>
+        <div class="meta">${s.source === "cr"
+          ? `${s.episodes} épisode${s.episodes > 1 ? "s" : ""} vus`
+          : `Ajoutée à la main`}</div>
+        <div class="foot">${starsHtml(s.id)}</div>
+      </div>
+    </div>
+  </div>`).join("") + `</div>`;
+}
+
+/* ================= interactions ================= */
+document.addEventListener("click", e => {
+  const dis = e.target.closest(".dismiss");
+  if (dis) {
+    e.preventDefault(); e.stopPropagation();
+    SEEN.add(Number(dis.dataset.seen));
+    write(KEYS.seen, [...SEEN]);
+    dis.closest(".card-wrap").remove();
+    return;
+  }
+  const star = e.target.closest(".stars button");
+  if (star) {
+    e.preventDefault();
+    const id = Number(star.closest(".stars").dataset.rate);
+    const value = Number(star.dataset.star);
+    if (RATINGS[id] === value) delete RATINGS[id]; else RATINGS[id] = value;
+    write(KEYS.rating, RATINGS);
+    $("maliste").innerHTML = renderMaListe();
+    $("saison").innerHTML = renderSaison(null);
+    $("recalc").textContent = "Recalculer d'après mes notes";
+    $("recalc").classList.add("primary");
+  }
+});
+
+/* recherche pour ajouter une serie vue ailleurs */
+let searchTimer = null;
+$("search").addEventListener("input", e => {
+  clearTimeout(searchTimer);
+  const term = e.target.value.trim();
+  if (term.length < 2) { $("search-results").innerHTML = ""; return; }
+  searchTimer = setTimeout(async () => {
+    $("search-results").innerHTML = `<div class="loading">Recherche…</div>`;
+    try {
+      const d = await gql(Q_SEARCH, { s: term });
+      const found = d.Page.media;
+      if (!found.length) { $("search-results").innerHTML = empty("Aucun résultat."); return; }
+      $("search-results").innerHTML = `<div class="list-grid">` + found.map(m => {
+        const already = isSeen(m.id);
+        return `<div class="card-wrap list-row">
+          <div class="card">
+            <img src="${esc(m.coverImage?.large || "")}" alt="" loading="lazy">
+            <div class="body">
+              <div class="title">${esc(m.title.english || m.title.romaji)}</div>
+              <div class="meta">${(m.genres || []).slice(0, 3).join(" · ")}${m.startDate?.year ? " · " + m.startDate.year : ""}</div>
+              <div class="foot">
+                <button class="add-btn ${already ? "done" : ""}" data-add="${m.id}"
+                  data-title="${esc(m.title.english || m.title.romaji)}"
+                  data-cover="${esc(m.coverImage?.large || "")}"
+                  data-genres="${esc((m.genres || []).join("|"))}"
+                  ${already ? "disabled" : ""}>${already ? "déjà dans ta liste" : "Ajouter à ma liste"}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join("") + `</div>`;
+    } catch (err) {
+      $("search-results").innerHTML = `<div class="err">${esc(err.message)}</div>`;
+    }
+  }, 420);
+});
+
+$("search-results").addEventListener("click", e => {
+  const btn = e.target.closest("[data-add]");
+  if (!btn) return;
+  ADDED.push({
+    id: Number(btn.dataset.add),
+    title: btn.dataset.title,
+    cover: btn.dataset.cover,
+    genres: btn.dataset.genres ? btn.dataset.genres.split("|") : [],
+    episodes: 0,
+    last: new Date().toISOString(),
+  });
+  write(KEYS.added, ADDED);
+  btn.textContent = "ajoutée";
+  btn.classList.add("done");
+  btn.disabled = true;
+  $("maliste").innerHTML = renderMaListe();
+});
+
+/* surcouche de calibrage */
+function renderCalibGrid() {
+  $("calib-grid").innerHTML = POPULAR.map(p => {
+    const locked = CR_SEEN.has(p.id);
+    const picked = SEEN.has(p.id);
+    return `<div class="poster ${locked ? "locked" : (picked ? "picked" : "")}" data-pid="${locked ? "" : p.id}">
+      <img src="${esc(p.cover)}" alt="" loading="lazy">
+      <div class="cap">${esc(p.title)}</div>
+    </div>`;
+  }).join("");
+}
+$("open-calib").onclick = () => { renderCalibGrid(); $("calib").classList.add("on"); };
+$("calib-done").onclick = async () => {
+  $("calib").classList.remove("on");
+  const { items, ratedCount } = await computeRecos({ force: false }).catch(() => ({ items: RECOS }));
+  $("pourtoi").innerHTML = renderPourToi(items, { ratedCount });
+  $("saison").innerHTML = renderSaison(null);
+};
+$("calib-reset").onclick = () => { SEEN = new Set(); write(KEYS.seen, []); renderCalibGrid(); };
+$("calib-grid").addEventListener("click", e => {
+  const cell = e.target.closest(".poster");
+  if (!cell || !cell.dataset.pid) return;
+  const id = Number(cell.dataset.pid);
+  if (SEEN.has(id)) SEEN.delete(id); else SEEN.add(id);
+  write(KEYS.seen, [...SEEN]);
+  cell.classList.toggle("picked", SEEN.has(id));
+});
+
+/* sauvegarde et restauration des notes */
+$("open-backup").onclick = () => {
+  $("backup-text").value = JSON.stringify({
+    v: 1,
+    ratings: RATINGS,
+    added: ADDED,
+    seen: [...SEEN],
+  }, null, 2);
+  $("backup-msg").innerHTML = "";
+  $("backup").classList.add("on");
+};
+$("backup-close").onclick = () => $("backup").classList.remove("on");
+$("backup-copy").onclick = async () => {
+  const area = $("backup-text");
+  try {
+    await navigator.clipboard.writeText(area.value);
+    $("backup-msg").innerHTML = `<div class="pill ok" style="margin-top:8px">Copié</div>`;
+  } catch {
+    area.select();
+    $("backup-msg").innerHTML = `<div class="hint">Sélectionné : fais copier à la main.</div>`;
+  }
+};
+$("backup-restore").onclick = () => {
+  try {
+    const data = JSON.parse($("backup-text").value);
+    if (!data || typeof data !== "object") throw new Error("format inattendu");
+    RATINGS = data.ratings || {};
+    ADDED   = Array.isArray(data.added) ? data.added : [];
+    SEEN    = new Set(Array.isArray(data.seen) ? data.seen : []);
+    write(KEYS.rating, RATINGS);
+    write(KEYS.added, ADDED);
+    write(KEYS.seen, [...SEEN]);
+    localStorage.removeItem(KEYS.cache);
+    $("maliste").innerHTML = renderMaListe();
+    $("saison").innerHTML = renderSaison(null);
+    $("backup-msg").innerHTML =
+      `<div class="pill ok" style="margin-top:8px">Restauré : ${Object.keys(RATINGS).length} notes</div>`;
+  } catch (err) {
+    $("backup-msg").innerHTML = `<div class="err" style="margin-top:8px">Sauvegarde illisible : ${esc(err.message)}</div>`;
+  }
+};
+
+/* recalcul explicite */
+$("recalc").onclick = async () => {
+  const btn = $("recalc");
+  btn.disabled = true; btn.textContent = "Calcul en cours…";
+  try {
+    const { items, ratedCount } = await computeRecos({ force: true });
+    $("pourtoi").innerHTML = renderPourToi(items, { ratedCount });
+    btn.textContent = "Recalculer d'après mes notes";
+    btn.classList.remove("primary");
+  } catch (err) {
+    $("pourtoi").innerHTML = `<div class="err">${esc(err.message)}</div>` + $("pourtoi").innerHTML;
+    btn.textContent = "Réessayer";
+  }
+  btn.disabled = false;
+};
+
+/* ================= demarrage ================= */
+(async function init() {
+  $("maliste").innerHTML = renderMaListe();
+  $("suites").innerHTML = renderSuites();
+  $("pourtoi").innerHTML = renderPourToi(RECOS, {});
+
+  const ids = PROFILE.series.map(s => s.anilist_id).filter(Boolean);
+  const live = {};
+  try {
+    for (let i = 0; i < ids.length; i += 50) {
+      const d = await gql(Q_LIVE, { ids: ids.slice(i, i + 50) });
+      for (const m of d.Page.media) live[m.id] = m;
+    }
+    $("semaine").innerHTML = renderSemaine(live);
+    $("retard").innerHTML = renderRetard(live);
+
+    const cs = currentSeason();
+    const d = await gql(Q_SAISON, { season: cs.season, year: cs.year });
+    $("saison").innerHTML = renderSaison(d.Page.media);
+    document.querySelector("#tab-saison .hint").textContent =
+      `Les nouveautés de l'${cs.label} ${cs.year}, triées par proximité avec tes goûts.`;
+
+    const cached = read(KEYS.cache, null);
+    if (cached?.fingerprint === ratingsFingerprint() && cached.items?.length) {
+      $("pourtoi").innerHTML = renderPourToi(cached.items, {});
+    }
+
+    $("status").textContent = `${myList().length} séries suivies · AniList à l'instant`;
+  } catch (e) {
+    const msg = `<div class="err">Impossible de joindre AniList : ${esc(e.message)}.</div>`;
+    for (const id of ["semaine", "retard", "saison"]) $(id).innerHTML = msg;
+    $("status").textContent = "AniList injoignable";
+  }
+})();
+</script>
+</body>
+</html>
