@@ -1,4 +1,5 @@
-data/
+donnees-locales/
 config.yaml
 .venv/
 *.pyc
+__pycache__/
