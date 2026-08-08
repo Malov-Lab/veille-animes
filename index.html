@@ -118,6 +118,47 @@
   .btn:active { opacity: .8; }
   .counter { color: var(--muted); font-size: 12px; }
 
+  /* --- sous-onglets de Ma liste --- */
+  .segmented {
+    display: flex; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 11px; padding: 3px; margin-bottom: 13px;
+  }
+  .segmented button {
+    flex: 1; background: none; border: 0; color: var(--muted); cursor: pointer;
+    font: 600 12.5px/1 inherit; font-family: inherit; padding: 9px 6px; border-radius: 8px;
+  }
+  .segmented button.on { background: var(--surface-2); color: var(--text); }
+
+  /* --- rang dans le top --- */
+  .rank {
+    position: absolute; top: 7px; left: 7px; z-index: 3;
+    background: var(--accent); color: #14181f; font-weight: 800; font-size: 12px;
+    min-width: 23px; height: 23px; border-radius: 7px;
+    display: grid; place-items: center; padding: 0 5px;
+  }
+  .rank.podium { background: var(--star); }
+  .move {
+    display: inline-flex; gap: 4px; margin-left: auto;
+  }
+  .move button {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 7px; width: 27px; height: 25px; font-size: 12px;
+    cursor: pointer; font-family: inherit; line-height: 1;
+  }
+  .move button:active { background: var(--accent); color: #14181f; }
+  .move button:disabled { opacity: .3; }
+  .row-foot { display: flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 7px; }
+
+  /* --- confirmation d'enregistrement --- */
+  .saved-toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 60;
+    background: var(--good); color: #0d1117; font-weight: 700; font-size: 12.5px;
+    padding: 7px 15px; border-radius: 20px; opacity: 0; pointer-events: none;
+    transition: opacity .18s;
+  }
+  .saved-toast.on { opacity: 1; }
+
   /* --- etoiles --- */
   .stars { display: inline-flex; gap: 1px; }
   .stars button {
@@ -227,17 +268,33 @@
 
   <section id="tab-maliste">
     <h2>Ma liste</h2>
-    <p class="hint">Note ce que tu as aimé. Une quinzaine de notes suffit à changer les suggestions.</p>
-    <div class="search-row">
-      <input id="search" type="search" placeholder="Ajouter une série vue ailleurs…" autocomplete="off">
+    <p class="hint" id="liste-hint">Note ce que tu as aimé. Une quinzaine de notes suffit à changer les suggestions.</p>
+
+    <div class="segmented">
+      <button data-vue="toutes" class="on">Toutes mes séries</button>
+      <button data-vue="top">Mon top</button>
     </div>
-    <div id="search-results"></div>
-    <div class="toolbar">
-      <button class="btn" id="resort">Reclasser par note</button>
-      <button class="btn" id="open-backup">Sauvegarder / restaurer mes notes</button>
+
+    <div id="vue-toutes">
+      <div class="search-row">
+        <input id="search" type="search" placeholder="Ajouter une série vue ailleurs…" autocomplete="off">
+      </div>
+      <div id="search-results"></div>
+      <div class="toolbar">
+        <button class="btn" id="resort">Reclasser par note</button>
+        <button class="btn" id="open-backup">Sauvegarder / restaurer mes notes</button>
+      </div>
+      <div class="counter" id="list-info" style="margin:4px 0 12px"></div>
+      <div id="maliste"></div>
     </div>
-    <div class="counter" id="list-info" style="margin:4px 0 12px"></div>
-    <div id="maliste"></div>
+
+    <div id="vue-top" hidden>
+      <div class="toolbar">
+        <button class="btn" id="top-rebuild">Reconstruire d'après mes notes</button>
+      </div>
+      <div class="counter" id="top-info" style="margin:4px 0 12px"></div>
+      <div id="montop"></div>
+    </div>
   </section>
 </main>
 
@@ -278,6 +335,8 @@
   </div>
 </div>
 
+<div class="saved-toast" id="toast">Enregistré</div>
+
 <nav>
   <button data-tab="semaine" class="on"><span class="ico">📅</span>Semaine<span class="badge" id="b-semaine" hidden></span></button>
   <button data-tab="retard"><span class="ico">⏳</span>Retard<span class="badge" id="b-retard" hidden></span></button>
@@ -304,6 +363,7 @@ const KEYS = {
   rating: "anime_veille_ratings",
   added:  "anime_veille_added",
   cache:  "anime_veille_reco_cache",
+  top:    "anime_veille_top",
 };
 
 const read = (key, fallback) => {
@@ -317,6 +377,17 @@ const write = (key, value) => {
 let SEEN    = new Set(read(KEYS.seen, []));
 let RATINGS = read(KEYS.rating, {});      // { anilistId: 1..5 }
 let ADDED   = read(KEYS.added, []);       // series ajoutees a la main
+let TOP     = read(KEYS.top, []);         // classement personnel, ordonne
+
+/* Confirmation visible : sans elle, rien ne dit que le tap a ete pris. */
+let toastTimer = null;
+function toast(text = "Enregistré") {
+  const el = $("toast");
+  el.textContent = text;
+  el.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("on"), 1100);
+}
 
 const CR_SEEN = new Set(PROFILE.series.map(s => s.anilist_id));
 const isSeen = id => CR_SEEN.has(id) || SEEN.has(id) || ADDED.some(a => a.id === id);
@@ -695,6 +766,91 @@ function renderMaListe() {
   </div>`).join("") + `</div>`;
 }
 
+/* ================= mon top =================
+   Classement personnel : amorce d'apres les notes, puis reordonnable a la
+   main. L'ordre choisi est conserve, les notes ne le bousculent plus.     */
+function seedTop() {
+  return myList()
+    .filter(s => (RATINGS[s.id] || 0) >= 3)
+    .sort((a, b) => (RATINGS[b.id] || 0) - (RATINGS[a.id] || 0))
+    .map(s => s.id);
+}
+
+function topEntries() {
+  const index = new Map(myList().map(s => [s.id, s]));
+  // On nettoie les identifiants devenus orphelins ou desormais non notes.
+  return TOP.map(id => index.get(id)).filter(s => s && RATINGS[s.id]);
+}
+
+function renderTop() {
+  const entries = topEntries();
+  $("top-info").textContent = entries.length
+    ? `${entries.length} séries classées. Les flèches changent l'ordre.`
+    : "";
+  if (!entries.length) {
+    return empty(Object.keys(RATINGS).length
+      ? "Touche « Reconstruire d'après mes notes » pour créer ton classement."
+      : "Note d'abord quelques séries dans l'onglet Toutes mes séries.");
+  }
+
+  return `<div class="list-grid">` + entries.map((s, i) => `
+    <div class="card-wrap list-row">
+      <div class="card">
+        <span class="rank ${i < 3 ? "podium" : ""}">${i + 1}</span>
+        <img src="${esc(s.cover || "")}" alt="" loading="lazy">
+        <div class="body">
+          <div class="title">${esc(s.title)}</div>
+          <div class="meta">${"★".repeat(RATINGS[s.id])}</div>
+          <div class="row-foot">
+            <span class="move">
+              <button data-up="${s.id}" ${i === 0 ? "disabled" : ""}>▲</button>
+              <button data-down="${s.id}" ${i === entries.length - 1 ? "disabled" : ""}>▼</button>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>`).join("") + `</div>`;
+}
+
+function moveInTop(id, delta) {
+  const order = topEntries().map(s => s.id);
+  const i = order.indexOf(id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  TOP = order;
+  write(KEYS.top, TOP);
+  $("montop").innerHTML = renderTop();
+}
+
+/* sous-onglets de Ma liste */
+document.querySelectorAll(".segmented button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".segmented button").forEach(b => b.classList.toggle("on", b === btn));
+    const top = btn.dataset.vue === "top";
+    $("vue-toutes").hidden = top;
+    $("vue-top").hidden = !top;
+    $("liste-hint").textContent = top
+      ? "Ton classement personnel. Réordonne-le avec les flèches, il ne bouge pas tout seul."
+      : "Note ce que tu as aimé. Une quinzaine de notes suffit à changer les suggestions.";
+    if (top) $("montop").innerHTML = renderTop();
+  };
+});
+
+$("top-rebuild").onclick = () => {
+  TOP = seedTop();
+  write(KEYS.top, TOP);
+  $("montop").innerHTML = renderTop();
+  toast(TOP.length ? `Top de ${TOP.length} séries` : "Aucune série notée 3 étoiles ou plus");
+};
+
+$("montop").addEventListener("click", e => {
+  const up = e.target.closest("[data-up]");
+  if (up) return moveInTop(Number(up.dataset.up), -1);
+  const down = e.target.closest("[data-down]");
+  if (down) return moveInTop(Number(down.dataset.down), +1);
+});
+
 /* ================= interactions ================= */
 document.addEventListener("click", e => {
   const dis = e.target.closest(".dismiss");
@@ -714,11 +870,19 @@ document.addEventListener("click", e => {
     if (RATINGS[id] === value) delete RATINGS[id]; else RATINGS[id] = value;
     write(KEYS.rating, RATINGS);
 
+    // Une serie notee 3 etoiles ou plus rejoint la fin du classement, sans
+    // deranger l'ordre deja choisi. Le bouton de reconstruction, lui, retrie tout.
+    if ((RATINGS[id] || 0) >= 3 && !TOP.includes(id)) {
+      TOP.push(id);
+      write(KEYS.top, TOP);
+    }
+
     // Volontairement, on NE re-trie PAS la liste ici : la carte notee sauterait
     // en haut de l'ecran et ferait perdre sa place. Seules les etoiles changent,
     // le reclassement attend le bouton dedie ou le prochain chargement.
     holder.parentElement.innerHTML = starsHtml(id);
     updateListInfo();
+    toast(RATINGS[id] ? "Note enregistrée" : "Note retirée");
     scheduleTasteRefresh();
   }
 });
