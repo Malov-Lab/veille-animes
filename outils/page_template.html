@@ -233,6 +233,7 @@
     </div>
     <div id="search-results"></div>
     <div class="toolbar">
+      <button class="btn" id="resort">Reclasser par note</button>
       <button class="btn" id="open-backup">Sauvegarder / restaurer mes notes</button>
     </div>
     <div class="counter" id="list-info" style="margin:4px 0 12px"></div>
@@ -665,16 +666,20 @@ function renderSaison(list) {
   })).join("") + `</div>`;
 }
 
+function updateListInfo(total) {
+  const rated = Object.keys(RATINGS).length;
+  $("list-info").textContent =
+    `${total ?? myList().length} séries · ${rated} notée${rated > 1 ? "s" : ""}` +
+    (ADDED.length ? ` · ${ADDED.length} ajoutée${ADDED.length > 1 ? "s" : ""} à la main` : "");
+}
+
 function renderMaListe() {
   const list = myList().sort((a, b) => {
     const ra = RATINGS[a.id] || 0, rb = RATINGS[b.id] || 0;
     if (ra !== rb) return rb - ra;
     return String(b.last || "").localeCompare(String(a.last || ""));
   });
-  const rated = Object.keys(RATINGS).length;
-  $("list-info").textContent =
-    `${list.length} séries · ${rated} notée${rated > 1 ? "s" : ""}` +
-    (ADDED.length ? ` · ${ADDED.length} ajoutée${ADDED.length > 1 ? "s" : ""} à la main` : "");
+  updateListInfo(list.length);
 
   return `<div class="list-grid">` + list.map(s => `<div class="card-wrap list-row">
     <div class="card">
@@ -703,16 +708,37 @@ document.addEventListener("click", e => {
   const star = e.target.closest(".stars button");
   if (star) {
     e.preventDefault();
-    const id = Number(star.closest(".stars").dataset.rate);
+    const holder = star.closest(".stars");
+    const id = Number(holder.dataset.rate);
     const value = Number(star.dataset.star);
     if (RATINGS[id] === value) delete RATINGS[id]; else RATINGS[id] = value;
     write(KEYS.rating, RATINGS);
-    $("maliste").innerHTML = renderMaListe();
+
+    // Volontairement, on NE re-trie PAS la liste ici : la carte notee sauterait
+    // en haut de l'ecran et ferait perdre sa place. Seules les etoiles changent,
+    // le reclassement attend le bouton dedie ou le prochain chargement.
+    holder.parentElement.innerHTML = starsHtml(id);
+    updateListInfo();
+    scheduleTasteRefresh();
+  }
+});
+
+/* Les vues qui dependent des notes se rafraichissent apres une pause, pour ne
+   pas recalculer a chaque etoile quand il note plusieurs series d'affilee.   */
+let tasteTimer = null;
+function scheduleTasteRefresh() {
+  clearTimeout(tasteTimer);
+  tasteTimer = setTimeout(() => {
     $("saison").innerHTML = renderSaison(null);
     $("recalc").textContent = "Recalculer d'après mes notes";
     $("recalc").classList.add("primary");
-  }
-});
+  }, 1500);
+}
+
+$("resort").onclick = () => {
+  $("maliste").innerHTML = renderMaListe();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
 /* recherche pour ajouter une serie vue ailleurs */
 let searchTimer = null;
