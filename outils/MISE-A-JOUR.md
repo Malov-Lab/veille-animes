@@ -58,6 +58,31 @@ Si seul le gabarit change, sans retaper AniList :
 ./.venv/Scripts/python.exe build_page.py --render-only
 ```
 
+## Le regroupement par œuvre
+
+AniList compte un média par saison. « Jujutsu Kaisen » et « Jujutsu Kaisen 2nd
+Season » y sont deux séries distinctes, avec deux notes possibles et deux lignes
+dans le top. La page ramène tout ça à une seule œuvre : la racine de la chaîne
+des prequels.
+
+- Le rattachement demande une requête AniList par série. Il est fait **une seule
+  fois**, en tâche de fond après le premier affichage, puis mis en cache dans le
+  navigateur (`anime_veille_roots`). Les ouvertures suivantes ne le refont pas.
+- Quand deux saisons portaient chacune une note, **la meilleure est conservée** :
+  le top classe des œuvres, sur le souvenir global.
+- Avant la toute première fusion, l'état complet est sauvegardé dans
+  `anime_veille_backup_premerge`. C'est le filet si le résultat déplaît.
+- La sauvegarde manuelle passe en `v3` et emporte le rattachement, pour que
+  l'autre appareil n'ait pas à refaire les requêtes. Une sauvegarde `v2` reste
+  lisible.
+- Seuls les liens `PREQUEL` vers un format de série (TV, TV court, ONA) sont
+  suivis. `PARENT` rattacherait les spin-offs et fusionnerait des œuvres
+  distinctes.
+
+Conséquence voulue : une suite non vue d'une série que tu suis **n'apparaît plus
+dans « Pour toi »**, puisque ce n'est pas une découverte. Elle remonte en tête de
+l'onglet « Cette saison » avec la mention « Tu suis déjà ».
+
 ## Ce qui vit où
 
 | Donnée | Emplacement | Publié ? |

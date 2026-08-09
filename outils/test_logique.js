@@ -11,8 +11,13 @@ const code = html.match(/<script>([\s\S]*?)<\/script>/)[1] + `
   get PROFILE(){return PROFILE}, get RATINGS(){return RATINGS},
   get TOP(){return TOP}, get HIDDEN(){return HIDDEN}, get REMOVED(){return REMOVED},
   get ADDED(){return ADDED},
+  set RATINGS(v){RATINGS = v}, set TOP(v){TOP = v},
+  get ROOTS(){return ROOTS},
+  // Le rattachement des saisons vient du reseau : en test, on l'injecte.
+  setRoots(map){ ROOTS = map; refreshListRoots(); },
   isInList, isExcluded, addToList, removeFromList, hideFromSuggestions,
-  myList, topEntries,
+  myList, topEntries, rootOf, groupByWork, mergeState, countMerged,
+  tasteProfile, genreFit, lateInterest, memberIds, refreshListRoots,
 };`;
 
 // --- DOM minimal : le script cable des handlers au chargement.
@@ -107,6 +112,90 @@ console.log("\n=== PERSISTANCE ===");
 check("les retraits sont ecrits", store.has("anime_veille_removed"));
 check("les ajouts sont ecrits", store.has("anime_veille_added"));
 check("les masquages sont ecrits", store.has("anime_veille_seen"));
+
+/* ================= regroupement par oeuvre =================
+   Scenario : une serie de l'historique Crunchyroll (la saison 1) et une saison 2
+   ajoutee a la main. AniList les compte separement, la page doit n'en faire
+   qu'une seule ligne, portant la meilleure des deux notes.                  */
+console.log("\n=== SAISONS D'UNE MEME OEUVRE ===");
+// On repart d'un etat propre : les tests precedents ont retire des series.
+store.clear();
+T.setRoots({});
+T.RATINGS = {};
+T.TOP = [];
+T.refreshListRoots();
+
+const S1 = T.PROFILE.series[1].anilist_id;      // saison 1, vue sur Crunchyroll
+const S2 = 999999201;                            // saison 2, ajoutee a la main
+const AUTRE = T.PROFILE.series[2].anilist_id;    // oeuvre sans rapport
+
+T.addToList({ id: S2, title: "Oeuvre test Season 2", cover: "", genres: ["Action"] });
+check("sans rattachement, les deux saisons font deux lignes",
+  T.myList().filter(s => s.id === S1 || s.id === S2).length === 2);
+
+T.setRoots({ [S2]: { root: S1, title: "Oeuvre test", cover: "" } });
+check("la saison 2 pointe vers la saison 1", T.rootOf(S2) === S1);
+check("une serie sans rattachement connu reste sa propre racine", T.rootOf(AUTRE) === AUTRE);
+
+const groupe = T.myList().find(s => s.id === S1);
+check("les deux saisons ne font plus qu'une ligne", !!groupe && groupe.parts.length === 2);
+check("la saison 2 n'a plus de ligne a elle", !T.myList().some(s => s.id === S2));
+check("la saison 2 compte comme deja dans la liste", T.isInList(S2));
+check("elle est donc exclue des suggestions", T.isExcluded(S2));
+
+console.log("\n=== FUSION DES NOTES : LA MEILLEURE GAGNE ===");
+T.RATINGS = { [S1]: 3, [S2]: 5, [AUTRE]: 4 };
+T.TOP = [S2, AUTRE, S1];
+T.mergeState();
+check("l'oeuvre garde la meilleure des deux notes", T.RATINGS[S1] === 5);
+check("la note de la saison 2 est absorbee", T.RATINGS[S2] === undefined);
+check("une oeuvre sans double n'est pas touchee", T.RATINGS[AUTRE] === 4);
+check("le top ne contient plus qu'une entree pour l'oeuvre",
+  T.TOP.filter(x => x === S1).length === 1 && !T.TOP.includes(S2));
+check("le rang de la mieux placee est conserve", T.TOP[0] === S1);
+check("le top garde l'autre oeuvre", T.TOP.includes(AUTRE));
+check("l'ajout manuel absorbe sort de ADDED", !T.ADDED.some(a => a.id === S2));
+
+console.log("\n=== LA FUSION EST IDEMPOTENTE ===");
+const avant = JSON.stringify([T.RATINGS, T.TOP, T.ADDED]);
+T.mergeState();
+check("repasser dessus ne change rien", JSON.stringify([T.RATINGS, T.TOP, T.ADDED]) === avant);
+
+console.log("\n=== RETRAIT D'UNE OEUVRE REGROUPEE ===");
+T.removeFromList(S2);          // le geste porte sur la saison 2
+check("l'oeuvre entiere sort de la liste", !T.isInList(S1) && !T.isInList(S2));
+check("sa note part avec elle", T.RATINGS[S1] === undefined);
+check("elle sort du top", !T.TOP.includes(S1));
+
+/* ================= tri par interet ================= */
+console.log("\n=== AFFINITE DE GENRES ===");
+const taste = { Action: 1, Comedy: 0.9, Drama: 0.1, Ecchi: -0.8, Horror: -0.9 };
+check("une serie qui colle bat une serie qui ne colle pas",
+  T.genreFit(["Action", "Comedy"], taste) > T.genreFit(["Horror", "Ecchi"], taste));
+check("empiler les genres tiedes ne bat pas deux genres forts",
+  T.genreFit(["Action", "Comedy"], taste) >
+  T.genreFit(["Drama", "Drama", "Drama", "Drama", "Drama", "Drama"], taste));
+check("sans genre, affinite nulle", T.genreFit([], taste) === 0);
+check("un genre rejete tire vers le bas", T.genreFit(["Horror"], taste) < 0);
+
+console.log("\n=== ORDRE DU RETARD ===");
+const hier = new Date(Date.now() - 2 * 86400000).toISOString();
+const vieux = new Date(Date.now() - 700 * 86400000).toISOString();
+const coupDeCoeur = T.lateInterest(
+  { genres: ["Action"], rating: 5, lastWatched: hier, behind: 2 }, taste);
+const grosRetard = T.lateInterest(
+  { genres: ["Horror"], rating: 0, lastWatched: vieux, behind: 40 }, taste);
+check("un coup de coeur repris hier passe devant un gros retard oublie",
+  coupDeCoeur > grosRetard);
+check("a tout le reste egal, une serie mal notee passe derriere une non notee",
+  T.lateInterest({ genres: ["Action"], rating: 2, lastWatched: hier, behind: 5 }, taste) <
+  T.lateInterest({ genres: ["Action"], rating: 0, lastWatched: hier, behind: 5 }, taste));
+check("a note et genres egaux, le petit retard passe devant",
+  T.lateInterest({ genres: ["Action"], rating: 4, lastWatched: hier, behind: 2 }, taste) >
+  T.lateInterest({ genres: ["Action"], rating: 4, lastWatched: hier, behind: 30 }, taste));
+check("a retard egal, la serie reprise recemment passe devant",
+  T.lateInterest({ genres: ["Action"], rating: 4, lastWatched: hier, behind: 5 }, taste) >
+  T.lateInterest({ genres: ["Action"], rating: 4, lastWatched: vieux, behind: 5 }, taste));
 
 console.log(`\n=== ${ok} verifications passees, ${ko} echecs ===`);
 process.exit(ko ? 1 : 0);

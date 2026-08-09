@@ -250,7 +250,7 @@
 
   <section id="tab-retard">
     <h2>Ton retard</h2>
-    <p class="hint">Des épisodes sont sortis depuis ton dernier visionnage.</p>
+    <p class="hint">Des épisodes sont sortis depuis ton dernier visionnage. Les plus susceptibles de te tenter d'abord, pas les plus gros retards.</p>
     <div id="retard"><div class="loading">Chargement…</div></div>
   </section>
 
@@ -376,6 +376,8 @@ const KEYS = {
   removed: "anime_veille_removed",  // retirees de la liste (jamais vues, ou erreur)
   cache:   "anime_veille_reco_cache",
   top:     "anime_veille_top",
+  roots:   "anime_veille_roots",    // saison AniList -> oeuvre, mis en cache
+  backup:  "anime_veille_backup_premerge",
 };
 
 const read = (key, fallback) => {
@@ -391,6 +393,7 @@ let RATINGS = read(KEYS.rating, {});           // { anilistId: 1..5 }
 let ADDED   = read(KEYS.added, []);            // vues ailleurs, entrees dans la liste
 let REMOVED = new Set(read(KEYS.removed, [])); // sorties de la liste
 let TOP     = read(KEYS.top, []);              // classement personnel, ordonne
+let ROOTS   = read(KEYS.roots, {});            // { mediaId: {root, title, cover} }
 
 /* Confirmation visible : sans elle, rien ne dit que le tap a ete pris. */
 let toastTimer = null;
@@ -404,7 +407,33 @@ function toast(text = "Enregistré") {
 
 const CR_IDS = new Set(PROFILE.series.map(s => s.anilist_id));
 
-/* Ma liste = historique Crunchyroll + ajouts manuels, moins les retraits.
+/* ================= une oeuvre, pas une saison =================
+   AniList compte un media par saison : « Jujutsu Kaisen » et « Jujutsu Kaisen
+   2nd Season » sont deux entrees distinctes, avec deux notes possibles et deux
+   lignes dans le top. Ici, une oeuvre = la racine de la chaine des prequels.
+   La correspondance coute une requete par media, donc elle est mise en cache
+   dans le navigateur une bonne fois pour toutes.
+
+   Volontairement, on ne suit que PREQUEL et seulement vers un format de serie :
+   PARENT rattacherait les spin-offs, et les films intercales fusionneraient des
+   oeuvres que Quentin compte separement.                                    */
+const SERIES_FORMATS = new Set(["TV", "TV_SHORT", "ONA"]);
+const MAX_CHAIN = 8;
+
+const rootOf = id => (ROOTS[id] && ROOTS[id].root) || id;
+const rootInfo = id => ROOTS[id] || null;
+
+/* Toutes les saisons connues d'une meme oeuvre, y compris la racine. */
+function memberIds(root) {
+  const out = new Set([root]);
+  for (const id of CR_IDS) if (rootOf(id) === root) out.add(id);
+  for (const a of ADDED) if (rootOf(a.id) === root) out.add(a.id);
+  for (const raw of Object.keys(RATINGS)) if (rootOf(Number(raw)) === root) out.add(Number(raw));
+  return [...out];
+}
+
+/* Ma liste = historique Crunchyroll + ajouts manuels, moins les retraits,
+   regroupes par oeuvre.
    Trois etats bien distincts :
      - dans la liste  : vue, notable
      - masquee        : pas envie de la voir proposee, mais pas vue
@@ -424,40 +453,92 @@ function myList() {
   const manual = ADDED
     .filter(a => !REMOVED.has(a.id))
     .map(a => ({ ...a, source: "manuel" }));
-  return [...fromCR, ...manual];
+  return groupByWork([...fromCR, ...manual]);
 }
 
-const listIds = () => new Set(myList().map(s => s.id));
-const isInList = id => !REMOVED.has(id) && (CR_IDS.has(id) || ADDED.some(a => a.id === id));
-/* Ce qui ne doit plus etre propose : deja dans la liste, ou explicitement masque. */
-const isExcluded = id => isInList(id) || HIDDEN.has(id);
+/* Fusionne les saisons d'une meme oeuvre en une seule ligne. Les episodes vus
+   s'additionnent, la date retenue est la plus recente, et le titre affiche est
+   celui de l'oeuvre entiere quand AniList nous l'a donne.                   */
+function groupByWork(entries) {
+  const byRoot = new Map();
+  for (const e of entries) {
+    const root = rootOf(e.id);
+    const info = rootInfo(e.id);
+    const current = byRoot.get(root);
+    if (!current) {
+      byRoot.set(root, {
+        ...e,
+        id: root,
+        parts: [e.id],
+        title: (root !== e.id && info && info.title) || e.title,
+        cover: e.cover || (info && info.cover) || "",
+      });
+      continue;
+    }
+    current.parts.push(e.id);
+    current.episodes = (current.episodes || 0) + (e.episodes || 0);
+    if (String(e.last || "") > String(current.last || "")) current.last = e.last;
+    current.genres = [...new Set([...(current.genres || []), ...(e.genres || [])])];
+    if (!current.cover) current.cover = e.cover;
+    if (e.source === "cr") current.source = "cr";
+    // Le titre de l'oeuvre prime sur celui d'une saison isolee.
+    if (e.id === root) current.title = e.title;
+  }
+  return [...byRoot.values()];
+}
 
-/* Marquer une serie comme vue : elle entre dans la liste pour etre notee. */
+/* Les oeuvres presentes dans la liste. Recalcule a chaque mutation plutot qu'a
+   chaque appel : isExcluded est teste des dizaines de fois par rendu.       */
+let LIST_ROOTS = new Set();
+function refreshListRoots() { LIST_ROOTS = new Set(myList().map(s => s.id)); }
+refreshListRoots();
+
+const listIds = () => new Set(myList().map(s => s.id));
+const isInList = id => !REMOVED.has(id) && LIST_ROOTS.has(rootOf(id));
+/* Ce qui ne doit plus etre propose : deja dans la liste, ou explicitement masque. */
+const isExcluded = id => isInList(id) || HIDDEN.has(rootOf(id)) || HIDDEN.has(id);
+
+/* Marquer une serie comme vue : elle entre dans la liste pour etre notee.
+   Si c'est la saison N d'une oeuvre deja suivie, elle rejoindra sa ligne des
+   que la racine sera resolue (absorbNewIds, en tache de fond).             */
 function addToList({ id, title, cover, genres }) {
+  const root = rootOf(id);
+  for (const m of memberIds(root)) { REMOVED.delete(m); HIDDEN.delete(m); }
   REMOVED.delete(id);
-  write(KEYS.removed, [...REMOVED]);
   HIDDEN.delete(id);
+  write(KEYS.removed, [...REMOVED]);
   write(KEYS.seen, [...HIDDEN]);
   if (!CR_IDS.has(id) && !ADDED.some(a => a.id === id)) {
     ADDED.push({ id, title, cover, genres: genres || [], episodes: 0, last: new Date().toISOString() });
     write(KEYS.added, ADDED);
   }
+  refreshListRoots();
 }
 
-/* Retirer de la liste : la serie disparait partout, notes et rang compris. */
+/* Retirer de la liste : l'oeuvre entiere disparait, toutes saisons confondues,
+   notes et rang compris. Retirer « la saison 2 » seule n'aurait plus de sens
+   maintenant que la liste raisonne par oeuvre.                             */
 function removeFromList(id) {
+  const root = rootOf(id);
+  for (const m of memberIds(root)) {
+    REMOVED.add(m);
+    delete RATINGS[m];
+  }
   REMOVED.add(id);
-  write(KEYS.removed, [...REMOVED]);
-  ADDED = ADDED.filter(a => a.id !== id);
-  write(KEYS.added, ADDED);
   delete RATINGS[id];
+  write(KEYS.removed, [...REMOVED]);
   write(KEYS.rating, RATINGS);
-  TOP = TOP.filter(x => x !== id);
+  ADDED = ADDED.filter(a => rootOf(a.id) !== root && a.id !== id);
+  write(KEYS.added, ADDED);
+  TOP = TOP.filter(x => rootOf(x) !== root && x !== id);
   write(KEYS.top, TOP);
+  refreshListRoots();
 }
 
-/* Masquer sans entrer dans la liste : « pas celle-la, pas maintenant ». */
+/* Masquer sans entrer dans la liste : « pas celle-la, pas maintenant ».
+   Masquer une saison masque l'oeuvre : sinon la saison 3 reviendrait proposee. */
 function hideFromSuggestions(id) {
+  HIDDEN.add(rootOf(id));
   HIDDEN.add(id);
   write(KEYS.seen, [...HIDDEN]);
 }
@@ -588,6 +669,161 @@ function buildRecoQuery(ids) {
   return `query { ${parts.join("\n")} }`;
 }
 
+/* Relations de plusieurs medias en une requete, meme principe d'alias. */
+function buildRelationQuery(ids) {
+  return `query { ${ids.map((id, i) => `
+    r${i}: Media(id: ${id}) {
+      id format genres title { romaji english } coverImage { large }
+      relations { edges { relationType node { id type format } } }
+    }`).join("\n")} }`;
+}
+
+/* Resout la racine des medias donnes et l'ecrit dans le cache. Remonte la
+   chaine des prequels couche par couche : la saison 3 mene a la 2, qui mene
+   a la 1. Renvoie le nombre de medias nouvellement resolus.               */
+async function resolveRoots(ids) {
+  const unknown = [...new Set(ids.filter(Boolean))].filter(id => !(id in ROOTS));
+  if (!unknown.length) return 0;
+
+  const known = {};
+  let queue = unknown.slice();
+  for (let depth = 0; depth < MAX_CHAIN && queue.length; depth++) {
+    const layer = queue.filter(id => !(id in known));
+    queue = [];
+    for (let i = 0; i < layer.length; i += 8) {
+      const chunk = layer.slice(i, i + 8);
+      const data = await gql(buildRelationQuery(chunk), {});
+      chunk.forEach((id, k) => {
+        const m = data["r" + k];
+        if (!m) { known[id] = { prequel: null }; return; }
+        const edge = (m.relations?.edges || []).find(e =>
+          e.relationType === "PREQUEL" &&
+          e.node?.type === "ANIME" &&
+          SERIES_FORMATS.has(e.node.format));
+        known[id] = {
+          prequel: edge ? edge.node.id : null,
+          title: m.title.english || m.title.romaji,
+          cover: m.coverImage?.large || "",
+        };
+        if (edge && !(edge.node.id in known)) queue.push(edge.node.id);
+      });
+    }
+  }
+
+  for (const raw of Object.keys(known)) {
+    const start = Number(raw);
+    const walked = new Set([start]);
+    let cur = start;
+    while (known[cur]?.prequel && !walked.has(known[cur].prequel)) {
+      cur = known[cur].prequel;
+      walked.add(cur);
+    }
+    ROOTS[start] = {
+      root: cur,
+      title: known[cur]?.title || known[start]?.title || "",
+      cover: known[cur]?.cover || known[start]?.cover || "",
+    };
+  }
+  write(KEYS.roots, ROOTS);
+  refreshListRoots();
+  return unknown.length;
+}
+
+/* Rassemble les notes, le top et les ajouts par oeuvre. La note gardee est la
+   meilleure des saisons : le top est un classement d'oeuvres, on le fait sur le
+   souvenir global et pas sur une moyenne. Idempotent : repasser dessus ne
+   change plus rien.                                                        */
+function mergeState() {
+  const before = JSON.stringify([RATINGS, ADDED.map(a => a.id), TOP]);
+
+  const best = {};
+  for (const raw of Object.keys(RATINGS)) {
+    const value = RATINGS[raw];
+    if (!value) continue;
+    const root = rootOf(Number(raw));
+    if (!(root in best) || value > best[root]) best[root] = value;
+  }
+
+  // Une serie Crunchyroll retiree ne doit pas avaler l'ajout manuel qui la remplace.
+  const crRoots = new Set([...CR_IDS].filter(id => !REMOVED.has(id)).map(rootOf));
+  const mergedAdded = [];
+  const seenAdded = new Set();
+  for (const a of ADDED) {
+    const root = rootOf(a.id);
+    if (crRoots.has(root)) continue;    // deja couvert par l'historique Crunchyroll
+    if (seenAdded.has(root)) continue;
+    seenAdded.add(root);
+    const info = rootInfo(a.id);
+    mergedAdded.push({
+      ...a,
+      id: root,
+      title: (root !== a.id && info?.title) || a.title,
+      cover: a.cover || info?.cover || "",
+    });
+  }
+
+  const mergedTop = [];
+  const seenTop = new Set();
+  for (const id of TOP) {
+    const root = rootOf(id);
+    if (seenTop.has(root)) continue;   // la saison la mieux placee garde le rang
+    seenTop.add(root);
+    mergedTop.push(root);
+  }
+
+  const mergedHidden = new Set([...HIDDEN].map(rootOf));
+
+  // Ce qui a reellement ete absorbe, compte avant d'ecraser l'etat.
+  const absorbed = (Object.keys(RATINGS).length - Object.keys(best).length)
+    + (ADDED.length - mergedAdded.length)
+    + (TOP.length - mergedTop.length);
+
+  RATINGS = best;
+  ADDED = mergedAdded;
+  TOP = mergedTop;
+  HIDDEN = mergedHidden;
+
+  const after = JSON.stringify([RATINGS, ADDED.map(a => a.id), TOP]);
+  if (before === after) { refreshListRoots(); return 0; }
+
+  write(KEYS.rating, RATINGS);
+  write(KEYS.added, ADDED);
+  write(KEYS.top, TOP);
+  write(KEYS.seen, [...HIDDEN]);
+  refreshListRoots();
+
+  return absorbed;
+}
+
+/* Lignes encore regroupees a l'affichage : plusieurs saisons d'une meme oeuvre
+   presentes dans l'historique Crunchyroll. Apres une fusion, les doublons de
+   notes ont disparu des donnees, ceux-la restent car l'historique est fige. */
+function countMerged() {
+  let extra = 0;
+  for (const s of myList()) extra += Math.max(0, (s.parts || []).length - 1);
+  return extra;
+}
+
+/* Sauvegarde d'avant la toute premiere fusion : elle est destructive sur les
+   notes en double, autant pouvoir revenir en arriere.                      */
+function backupBeforeMerge() {
+  if (localStorage.getItem(KEYS.backup)) return;
+  write(KEYS.backup, {
+    at: new Date().toISOString(),
+    ratings: RATINGS, added: ADDED, top: TOP,
+    hidden: [...HIDDEN], removed: [...REMOVED],
+  });
+}
+
+/* Une serie vient d'entrer dans la liste : resoudre sa racine et la rattacher
+   a son oeuvre si elle y a deja une place.                                 */
+async function absorbNewIds(ids) {
+  try {
+    if (!await resolveRoots(ids)) return 0;
+    return mergeState();
+  } catch { return 0; }
+}
+
 function currentSeason() {
   const m = new Date().getMonth() + 1, y = new Date().getFullYear();
   if (m <= 3) return { season: "WINTER", year: y, label: "hiver" };
@@ -613,6 +849,45 @@ function sourceWeights() {
   const positives = weighted.filter(s => s.weight > 0).sort((a, b) => b.weight - a.weight).slice(0, 20);
   const negatives = weighted.filter(s => s.weight < 0).slice(0, 6);
   return { positives, negatives, ratedCount: Object.keys(RATINGS).length };
+}
+
+/* ================= profil de gout =================
+   Poids par genre, ramenes dans [-1, 1]. Sans normalisation, les genres qui
+   reviennent partout chez lui (Action, Shounen) ecrasaient tout le reste et le
+   classement se reduisait a « combien de genres frequents ».               */
+function tasteProfile() {
+  const raw = {};
+  for (const s of myList()) {
+    const w = RATINGS[s.id] ? WEIGHT[RATINGS[s.id]] : 0.4;
+    for (const g of (s.genres || [])) raw[g] = (raw[g] || 0) + w;
+  }
+  const scale = Math.max(1, ...Object.values(raw).map(Math.abs));
+  const out = {};
+  for (const g of Object.keys(raw)) out[g] = raw[g] / scale;
+  return out;
+}
+
+/* Affinite d'un media avec ce profil. On divise par la racine du nombre de
+   genres : sinon une serie etiquetee six genres bat mecaniquement une serie
+   etiquetee deux, sans mieux correspondre.                                 */
+function genreFit(genres, taste) {
+  const g = genres || [];
+  if (!g.length) return 0;
+  const sum = g.reduce((acc, x) => acc + (taste[x] || 0), 0);
+  return sum / Math.sqrt(g.length);
+}
+
+/* Interet d'une serie en retard. Quatre signaux, du plus au moins parlant :
+   la note qu'il lui a mise, l'affinite de genres, la fraicheur du dernier
+   episode vu, et la facilite de rattrapage. Trier par nombre d'episodes de
+   retard mettait en tete les series les plus decourageantes.               */
+function lateInterest({ genres, rating, lastWatched, behind }, taste) {
+  const note = rating ? WEIGHT[rating] / 3.2 : 0;
+  const fit = genreFit(genres, taste);
+  const days = lastWatched ? (Date.now() - Date.parse(lastWatched)) / 86400000 : 999;
+  const recency = Math.exp(-Math.max(days, 0) / 120);
+  const ease = 1 / (1 + Math.max(behind, 0) / 6);
+  return 2.2 * note + 1.0 * fit + 1.4 * recency + 0.8 * ease;
 }
 
 function ratingsFingerprint() {
@@ -711,6 +986,7 @@ function renderSemaine(live) {
 }
 
 function renderRetard(live) {
+  const taste = tasteProfile();
   const rows = [];
   for (const s of PROFILE.series) {
     const m = live[s.anilist_id];
@@ -720,17 +996,31 @@ function renderRetard(live) {
     const behind = aired - seen;
     // Garde-fou : Crunchyroll numerote parfois en continu la ou AniList
     // decoupe en saisons. Au-dela d'un ecart absurde, on n'affiche rien.
-    if (behind > 0 && seen > 0 && seen <= aired * 1.5) rows.push({ m, behind, aired, seen });
+    if (!(behind > 0 && seen > 0 && seen <= aired * 1.5)) continue;
+    const rating = RATINGS[rootOf(s.anilist_id)] || 0;
+    // Une serie qu'il a notee « a eviter », il ne la reprendra pas : elle n'a
+    // rien a faire dans une liste triee par envie.
+    if (rating === 1) continue;
+    rows.push({
+      m, behind, aired, seen, rating,
+      interest: lateInterest({
+        genres: s.genres, rating, lastWatched: s.last_watched, behind,
+      }, taste),
+    });
   }
-  rows.sort((a, b) => b.behind - a.behind);
+  // L'ordre repond a « laquelle ai-je le plus envie de reprendre », pas a
+  // « sur laquelle ai-je le plus de retard ».
+  rows.sort((a, b) => b.interest - a.interest || a.behind - b.behind);
   badge("retard", rows.length);
   if (!rows.length) return empty("Tu es à jour partout. Rare, profite.");
 
-  return `<div class="grid">` + rows.map(({ m, behind, aired, seen }) => card({
+  return `<div class="grid">` + rows.map(({ m, behind, aired, seen, rating }) => card({
     url: m.siteUrl, cover: m.coverImage?.large,
     title: m.title.english || m.title.romaji,
     meta: `Épisode ${seen} sur ${aired} sortis`,
     foot: `<span class="pill late">${behind} de retard</span>`
+      + (rating ? ` <span class="pill soon">${"★".repeat(rating)}</span>` : "")
+      + (behind <= 3 ? ` <span class="pill ok">vite rattrapé</span>` : "")
   })).join("") + `</div>`;
 }
 
@@ -776,34 +1066,50 @@ function renderPourToi(items, meta) {
 }
 
 let LAST_SEASON = null;
+let LAST_LIVE = null;
 function renderSaison(list) {
   if (list) LAST_SEASON = list;
   const source = LAST_SEASON || [];
-  const taste = {};
-  for (const s of myList()) {
-    const boost = RATINGS[s.id] ? WEIGHT[RATINGS[s.id]] : 0.4;
-    for (const g of (s.genres || [])) taste[g] = (taste[g] || 0) + boost;
-  }
+  const taste = tasteProfile();
+  const known = new Map(myList().map(s => [s.id, s]));
+
   const scored = source
     .filter(m => !isExcluded(m.id))
-    .map(m => ({ m, fit: (m.genres || []).reduce((a, g) => a + (taste[g] || 0), 0) }))
-    .sort((a, b) => b.fit - a.fit || (b.m.averageScore || 0) - (a.m.averageScore || 0));
+    .map(m => {
+      const fit = genreFit(m.genres, taste);
+      // Le plus fort signal de la saison : c'est la suite d'une oeuvre qu'il
+      // suit deja. Une nouveaute inconnue ne peut pas rivaliser avec ca.
+      const parent = known.get(rootOf(m.id));
+      const rated = parent ? (RATINGS[parent.id] || 0) : 0;
+      const sequel = parent ? (rated ? WEIGHT[rated] : 0.8) : 0;
+      const buzz = ((m.averageScore || 60) - 60) / 40;   // -1.5 .. 1
+      return {
+        m, fit, parent, rated,
+        interest: 1.6 * sequel + 1.0 * fit + 0.6 * buzz,
+      };
+    })
+    .sort((a, b) => b.interest - a.interest || (b.m.averageScore || 0) - (a.m.averageScore || 0));
   if (!scored.length) return empty("Rien de nouveau trouvé pour cette saison.");
 
-  return `<div class="grid">` + scored.slice(0, 24).map(({ m, fit }) => card({
+  return `<div class="grid">` + scored.slice(0, 24).map(({ m, fit, parent, rated }) => card({
     url: m.siteUrl, cover: m.coverImage?.large,
     title: m.title.english || m.title.romaji,
-    meta: (m.genres || []).slice(0, 3).join(" · "),
-    foot: `${m.averageScore ? `<span class="score">${m.averageScore}%</span> ` : ""}${fit > 0 ? `<span class="pill soon">Dans tes goûts</span>` : ""}`,
+    meta: parent
+      ? `Suite de ${esc(parent.title)}${rated ? " · " + "★".repeat(rated) : ""}`
+      : (m.genres || []).slice(0, 3).join(" · "),
+    foot: `${m.averageScore ? `<span class="score">${m.averageScore}%</span> ` : ""}`
+      + (parent ? `<span class="pill ok">Tu suis déjà</span>` : (fit > 0 ? `<span class="pill soon">Dans tes goûts</span>` : "")),
     actionsFor: { id: m.id, title: m.title.english || m.title.romaji, cover: m.coverImage?.large, genres: m.genres }
   })).join("") + `</div>`;
 }
 
 function updateListInfo(total) {
   const rated = Object.keys(RATINGS).length;
+  const merged = countMerged();
   $("list-info").textContent =
-    `${total ?? myList().length} séries · ${rated} notée${rated > 1 ? "s" : ""}` +
-    (ADDED.length ? ` · ${ADDED.length} ajoutée${ADDED.length > 1 ? "s" : ""} à la main` : "");
+    `${total ?? myList().length} œuvres · ${rated} notée${rated > 1 ? "s" : ""}` +
+    (ADDED.length ? ` · ${ADDED.length} ajoutée${ADDED.length > 1 ? "s" : ""} à la main` : "") +
+    (merged ? ` · ${merged} saison${merged > 1 ? "s" : ""} regroupée${merged > 1 ? "s" : ""}` : "");
 }
 
 function renderMaListe() {
@@ -821,7 +1127,8 @@ function renderMaListe() {
         <div class="title">${esc(s.title)}</div>
         <div class="meta">${s.source === "cr"
           ? `${s.episodes} épisode${s.episodes > 1 ? "s" : ""} vus`
-          : `Ajoutée à la main`}</div>
+          : `Ajoutée à la main`}${(s.parts || []).length > 1
+          ? ` · ${s.parts.length} saisons réunies` : ""}</div>
         <div class="row-foot">
           ${starsHtml(s.id)}
           <button class="act-remove" data-remove="${s.id}">retirer</button>
@@ -921,11 +1228,17 @@ document.addEventListener("click", e => {
   const seenBtn = e.target.closest(".act-seen");
   if (seenBtn) {
     e.preventDefault(); e.stopPropagation();
-    try { addToList(JSON.parse(seenBtn.dataset.add)); } catch { return; }
+    let added;
+    try { added = JSON.parse(seenBtn.dataset.add); addToList(added); } catch { return; }
     seenBtn.closest(".card-wrap").remove();
     $("maliste").innerHTML = renderMaListe();
     toast("Ajoutée à ta liste, tu peux la noter");
     scheduleTasteRefresh();
+    // Si c'est la saison N d'une oeuvre deja suivie, elle rejoint sa ligne.
+    absorbNewIds([added.id]).then(() => {
+      $("maliste").innerHTML = renderMaListe();
+      $("montop").innerHTML = renderTop();
+    });
     return;
   }
   const hideBtn = e.target.closest(".act-hide");
@@ -1030,8 +1343,9 @@ $("search-results").addEventListener("click", e => {
   const btn = e.target.closest(".add-btn");
   if (!btn) return;
   e.preventDefault(); e.stopPropagation();
+  const id = Number(btn.dataset.add);
   addToList({
-    id: Number(btn.dataset.add),
+    id,
     title: btn.dataset.title,
     cover: btn.dataset.cover,
     genres: btn.dataset.genres ? btn.dataset.genres.split("|") : [],
@@ -1042,6 +1356,11 @@ $("search-results").addEventListener("click", e => {
   $("maliste").innerHTML = renderMaListe();
   toast("Ajoutée à ta liste");
   scheduleTasteRefresh();
+  absorbNewIds([id]).then(merged => {
+    $("maliste").innerHTML = renderMaListe();
+    $("montop").innerHTML = renderTop();
+    if (merged) toast("Rattachée à l'œuvre que tu suis déjà");
+  });
 });
 
 /* surcouche de calibrage */
@@ -1083,12 +1402,15 @@ $("calib-grid").addEventListener("click", e => {
 /* sauvegarde et restauration des notes */
 $("open-backup").onclick = () => {
   $("backup-text").value = JSON.stringify({
-    v: 2,
+    v: 3,
     ratings: RATINGS,
     added: ADDED,
     hidden: [...HIDDEN],
     removed: [...REMOVED],
     top: TOP,
+    // Emportees pour que l'autre appareil n'ait pas a refaire les requetes
+    // de rattachement des saisons a leur oeuvre.
+    roots: ROOTS,
   }, null, 2);
   $("backup-msg").innerHTML = "";
   $("backup").classList.add("on");
@@ -1114,12 +1436,19 @@ $("backup-restore").onclick = () => {
     HIDDEN  = new Set(Array.isArray(data.hidden) ? data.hidden : (data.seen || []));
     REMOVED = new Set(Array.isArray(data.removed) ? data.removed : []);
     TOP     = Array.isArray(data.top) ? data.top : [];
+    // v3 emporte le rattachement des saisons ; sans lui, il se refera tout seul.
+    if (data.roots && typeof data.roots === "object") {
+      ROOTS = { ...ROOTS, ...data.roots };
+      write(KEYS.roots, ROOTS);
+    }
     write(KEYS.rating, RATINGS);
     write(KEYS.added, ADDED);
     write(KEYS.seen, [...HIDDEN]);
     write(KEYS.removed, [...REMOVED]);
     write(KEYS.top, TOP);
     localStorage.removeItem(KEYS.cache);
+    refreshListRoots();
+    mergeState();
     $("maliste").innerHTML = renderMaListe();
     $("montop").innerHTML = renderTop();
     $("saison").innerHTML = renderSaison(null);
@@ -1159,6 +1488,7 @@ $("recalc").onclick = async () => {
       const d = await gql(Q_LIVE, { ids: ids.slice(i, i + 50) });
       for (const m of d.Page.media) live[m.id] = m;
     }
+    LAST_LIVE = live;
     $("semaine").innerHTML = renderSemaine(live);
     $("retard").innerHTML = renderRetard(live);
 
@@ -1166,20 +1496,53 @@ $("recalc").onclick = async () => {
     const d = await gql(Q_SAISON, { season: cs.season, year: cs.year });
     $("saison").innerHTML = renderSaison(d.Page.media);
     document.querySelector("#tab-saison .hint").textContent =
-      `Les nouveautés de l'${cs.label} ${cs.year}, triées par proximité avec tes goûts.`;
+      `Les nouveautés de l'${cs.label} ${cs.year}. D'abord les suites de ce que tu suis, puis ce qui colle le mieux à tes goûts.`;
 
     const cached = read(KEYS.cache, null);
     if (cached?.fingerprint === ratingsFingerprint() && cached.items?.length) {
       $("pourtoi").innerHTML = renderPourToi(cached.items, {});
     }
 
-    $("status").textContent = `${myList().length} séries suivies · AniList à l'instant`;
+    $("status").textContent = `${myList().length} œuvres suivies · AniList à l'instant`;
+
+    // Rattachement des saisons a leur oeuvre, apres le premier rendu pour ne
+    // pas retarder l'affichage. Le resultat est mis en cache : ce travail n'a
+    // lieu qu'une fois, puis seulement pour les series nouvellement ajoutees.
+    await regrouperParOeuvre(d.Page.media);
   } catch (e) {
     const msg = `<div class="err">Impossible de joindre AniList : ${esc(e.message)}.</div>`;
     for (const id of ["semaine", "retard", "saison"]) $(id).innerHTML = msg;
     $("status").textContent = "AniList injoignable";
   }
 })();
+
+async function regrouperParOeuvre(seasonMedia) {
+  const listeIds = [...CR_IDS, ...ADDED.map(a => a.id), ...Object.keys(RATINGS).map(Number)];
+  const inconnus = listeIds.filter(id => id && !(id in ROOTS)).length;
+  try {
+    if (inconnus) {
+      $("status").textContent = `Regroupement des saisons… (${inconnus} à vérifier)`;
+      backupBeforeMerge();
+      await resolveRoots(listeIds);
+    }
+    const fusionnees = mergeState();
+    $("maliste").innerHTML = renderMaListe();
+    $("montop").innerHTML = renderTop();
+    // Les notes viennent de bouger : le classement du retard en depend.
+    if (LAST_LIVE) $("retard").innerHTML = renderRetard(LAST_LIVE);
+    if (inconnus && fusionnees) toast(`${fusionnees} saisons regroupées avec leur œuvre`);
+
+    // Les nouveautes de la saison aussi : c'est ce qui permet de reconnaitre
+    // « suite d'une oeuvre que tu suis » et de la faire remonter.
+    await resolveRoots((seasonMedia || []).map(m => m.id));
+    $("saison").innerHTML = renderSaison(null);
+    $("status").textContent = `${myList().length} œuvres suivies · AniList à l'instant`;
+  } catch {
+    // Sans rattachement, la page reste dans son comportement d'avant : chaque
+    // saison compte pour une ligne. Rien n'est casse, on ne dit rien.
+    $("status").textContent = `${myList().length} œuvres suivies · AniList à l'instant`;
+  }
+}
 </script>
 </body>
 </html>
