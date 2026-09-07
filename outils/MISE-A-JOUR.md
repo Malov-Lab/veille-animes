@@ -7,56 +7,64 @@ Une seule chose ne se met pas à jour seule : **la liste des séries elle-même*
 Quand tu commences une nouvelle série sur Crunchyroll, elle n'apparaît pas tant
 que l'historique n'a pas été récupéré à nouveau.
 
-Deux façons de la corriger :
+## La routine hebdomadaire
 
-- **Rapide, depuis la page** : onglet « Ma liste », la recherche en haut. Tu ajoutes
-  la série à la main, elle compte immédiatement dans les suggestions.
-- **Complète, en relançant la récupération** : la procédure ci-dessous.
+**Depuis le 2026-09-07, c'est automatique.** La tâche planifiée Windows
+« Veille animes » lance `outils/routine_hebdo.py` **chaque dimanche à 19h**, avec
+rattrapage si le poste était éteint. Elle enchaîne l'export Crunchyroll,
+l'appariement AniList des seules séries neuves, la régénération, les tests, puis
+le commit et le push. Tu n'as rien à faire.
 
-## Relancer la récupération complète
+- **Le cookie `etp_rt` est le point qui cassera.** Quand il expire, la routine
+  s'arrête et **t'envoie un message Telegram** disant quoi faire. Tant qu'il n'est
+  pas renouvelé dans `.crunchyexporter/config.yaml`, la page reste figée.
+- Elle refuse de publier une page cassée : `test_logique.js` et
+  `test_rattachement.js` doivent passer, sinon rien n'est poussé.
+- Trois garde-fous contre la publication d'un désastre silencieux : un historique
+  vide, un historique qui a fondu de plus de 10 %, et un `anime.html`
+  anormalement petit interrompent la routine.
+- À la main : `.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py`,
+  avec `--dry-run` pour tout faire sauf publier, et `--complet` pour réinterroger
+  AniList sur toutes les séries au lieu des seules nouveautés.
+- Journal dans `.routine.log`, non versionné.
 
-Prérequis : Python 3.11 ou plus.
+Pour ajouter une série tout de suite sans attendre dimanche : onglet « Ma liste »,
+la recherche en haut. Elle compte immédiatement dans les suggestions.
+
+## Relancer la récupération à la main
+
+L'outil d'export est installé à demeure dans `.crunchyexporter/`, avec son venv.
+Il n'y a plus rien à cloner : la routine s'en sert, et toi aussi.
 
 ```bash
-# 1. Récupérer l'outil d'export Crunchyroll
-git clone https://github.com/ruflas/crunchyexporter-cli
-cd crunchyexporter-cli
-python -m venv .venv
-./.venv/Scripts/python.exe -m pip install -r requirements.txt
+# Tout, de l'export au push
+.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py
 
-# Norton inspecte le HTTPS sur ce poste : sans ce paquet, toutes les
-# requêtes échouent en « certificate verify failed ».
-./.venv/Scripts/python.exe -m pip install pip-system-certs
+# Tout sauf le commit et le push
+.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py --dry-run
 
-# 2. Copier les outils et les données conservées
-cp ../outils/*.py ../outils/page_template.html .
-mkdir -p data && cp ../donnees-locales/*.json data/
-
-# 3. Renseigner le cookie de session Crunchyroll dans config.yaml
-#    (crunchyroll.com connecté, F12, Application, Cookies, valeur de 'etp_rt')
-cp config.example.yaml config.yaml
-
-# 4. Récupérer l'historique, puis régénérer la page
-./.venv/Scripts/python.exe src/main.py -c config.yaml fetch
-./.venv/Scripts/python.exe build_profile.py     # ~4 min, limite AniList
-./.venv/Scripts/python.exe build_page.py        # ~2 min
-
-# 5. Publier
-cp anime.html ../index.html
-cd .. && git add -A && git commit -m "Mise a jour de l'historique" && git push
+# En réinterrogeant AniList sur les 102 séries, et pas seulement les nouvelles
+.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py --complet
 ```
 
-Le cookie `etp_rt` vaut un accès au compte Crunchyroll : il reste dans
-`config.yaml`, qui n'est jamais versionné. Se déconnecter de Crunchyroll depuis
-le site l'invalide.
+Le cookie se renouvelle dans `.crunchyexporter/config.yaml` : crunchyroll.com
+connecté, F12, onglet Application, Cookies, valeur de `etp_rt`. Ce fichier n'est
+jamais versionné, et se déconnecter de Crunchyroll depuis le site l'invalide.
+
+Norton inspecte le HTTPS sur ce poste : le venv embarque `pip-system-certs`,
+sans quoi toutes les requêtes échouent en « certificate verify failed ».
 
 ## Regénérer seulement la page
 
 Si seul le gabarit change, sans retaper AniList :
 
 ```bash
-./.venv/Scripts/python.exe build_page.py --render-only
+.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py --dry-run
 ```
+
+La routine s'en charge et vérifie les tests au passage. Pour l'appel nu, il
+faut un dossier de travail contenant `data/` et `page_template.html`, ce que
+`routine_hebdo.py` monte pour toi dans `.crunchyexporter/`.
 
 ## Le regroupement par œuvre
 
@@ -86,6 +94,10 @@ des prequels.
   changement de règle de rattachement.**
 - `outils/test_rattachement.js` couvre ces deux points, réseau simulé. Il se
   lance comme `test_logique.js`, depuis un dossier contenant `anime.html`.
+
+Conséquence voulue : une suite non vue d'une série que tu suis **n'apparaît plus
+dans « Pour toi »**, puisque ce n'est pas une découverte. Elle remonte en tête de
+l'onglet « Cette saison » avec la mention « Tu suis déjà ».
 
 ### La grille de calibrage, elle, est regroupée au build
 
@@ -124,9 +136,6 @@ annonce la vraie page appelante, il n'usurpe pas anilist.co.
 L'API a par ailleurs de vrais trous : environ une requête sur trois part en
 timeout par moments. Les retries existants absorbent ça.
 
-Conséquence voulue : une suite non vue d'une série que tu suis **n'apparaît plus
-dans « Pour toi »**, puisque ce n'est pas une découverte. Elle remonte en tête de
-l'onglet « Cette saison » avec la mention « Tu suis déjà ».
 
 ## Ce qui vit où
 
@@ -135,7 +144,9 @@ l'onglet « Cette saison » avec la mention « Tu suis déjà ».
 | Liste des séries, suites, suggestions de départ | `index.html` | oui |
 | Notes, ajouts manuels, séries écartées | stockage local du navigateur | non |
 | Historique Crunchyroll brut | `donnees-locales/` | non |
-| Cookie de session | `config.yaml` | non |
+| Cookie de session | `.crunchyexporter/config.yaml` | non |
+| Jeton Telegram des alertes | `.telegram.env` | non |
+| Journal de la routine | `.routine.log` | non |
 
 Sauvegarde des notes : onglet « Ma liste », bouton
 « Sauvegarder / restaurer mes notes ». C'est aussi le moyen de les transférer

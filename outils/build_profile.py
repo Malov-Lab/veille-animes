@@ -125,12 +125,40 @@ def extract_sequels(media):
     return sequels
 
 
+def charger_profil_existant(path="data/profile.json"):
+    """Les appariements deja faits, indexes par titre Crunchyroll."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return {s["cr_title"]: s for s in json.load(fh).get("series", [])}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
 def main():
+    # --incremental : n'interroge AniList que pour les series jamais appariees.
+    # Une serie deja trouvee ne change pas d'identite ; ses compteurs de
+    # visionnage, eux, sont relus de l'historique a chaque passage. Ce qui est
+    # volatil (prochain episode, statut) est de toute facon redemande en direct
+    # par la page. Passe de ~100 requetes a quelques-unes.
+    incremental = "--incremental" in sys.argv
+    connus = charger_profil_existant() if incremental else {}
+
     series = summarize_history(load_history())
-    print(f"{len(series)} series a faire correspondre.\n")
+    if incremental:
+        neuves = [s for s in series if s["cr_title"] not in connus]
+        print(f"{len(series)} series, dont {len(neuves)} a interroger "
+              f"({len(series) - len(neuves)} deja appariees).\n")
+    else:
+        print(f"{len(series)} series a faire correspondre.\n")
 
     matched, unmatched = [], []
     for i, entry in enumerate(series, 1):
+        deja = connus.get(entry["cr_title"])
+        if deja and deja.get("anilist_id"):
+            # Les compteurs viennent de l'historique frais, le reste du cache.
+            fusion = {**deja, **entry}
+            matched.append(fusion)
+            continue
         media = query_anilist(entry["cr_title"])
         if not media:
             unmatched.append(entry["cr_title"])
@@ -170,6 +198,12 @@ def main():
     print(f"Non trouvees    : {len(unmatched)}")
     for title in unmatched:
         print(f"  - {title}")
+
+    # Filet : en incremental, un profil qui maigrit signale un incident (fichier
+    # d'historique tronque, export partiel). Mieux vaut le dire que l'ecrire.
+    if incremental and connus and len(matched) < len(connus):
+        print(f"\nATTENTION : {len(connus)} series appariees avant, "
+              f"{len(matched)} apres. L'historique a-t-il ete tronque ?")
 
 
 if __name__ == "__main__":
