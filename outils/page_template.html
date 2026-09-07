@@ -393,7 +393,18 @@ let RATINGS = read(KEYS.rating, {});           // { anilistId: 1..5 }
 let ADDED   = read(KEYS.added, []);            // vues ailleurs, entrees dans la liste
 let REMOVED = new Set(read(KEYS.removed, [])); // sorties de la liste
 let TOP     = read(KEYS.top, []);              // classement personnel, ordonne
-let ROOTS   = read(KEYS.roots, {});            // { mediaId: {root, title, cover} }
+
+/* Le rattachement est mis en cache, donc une erreur s'y installe pour toujours :
+   avant le correctif, une requete perdue etait enregistree comme un verdict
+   « pas de prequel » et la serie restait separee de son oeuvre. Le numero de
+   version permet de jeter un cache construit par l'ancienne logique. A monter
+   a chaque changement de regle de rattachement.                             */
+const ROOTS_VERSION = 2;
+let ROOTS = (() => {
+  const brut = read(KEYS.roots, null);
+  return (brut && brut.v === ROOTS_VERSION && brut.map) ? brut.map : {};
+})();
+const writeRoots = () => write(KEYS.roots, { v: ROOTS_VERSION, map: ROOTS });
 
 /* Confirmation visible : sans elle, rien ne dit que le tap a ete pris. */
 let toastTimer = null;
@@ -695,7 +706,10 @@ async function resolveRoots(ids) {
       const data = await gql(buildRelationQuery(chunk), {});
       chunk.forEach((id, k) => {
         const m = data["r" + k];
-        if (!m) { known[id] = { prequel: null }; return; }
+        // Media absent de la reponse : on n'a rien appris. Le distinguer d'un
+        // « pas de prequel » est essentiel, sinon l'echec part en cache comme
+        // un verdict et la serie ne sera plus jamais rattachee.
+        if (!m) { known[id] = { prequel: null, unresolved: true }; return; }
         const edge = (m.relations?.edges || []).find(e =>
           e.relationType === "PREQUEL" &&
           e.node?.type === "ANIME" &&
@@ -710,23 +724,30 @@ async function resolveRoots(ids) {
     }
   }
 
+  let resolus = 0;
   for (const raw of Object.keys(known)) {
     const start = Number(raw);
     const walked = new Set([start]);
     let cur = start;
+    let sur = !known[start].unresolved;
     while (known[cur]?.prequel && !walked.has(known[cur].prequel)) {
       cur = known[cur].prequel;
       walked.add(cur);
+      if (known[cur]?.unresolved) sur = false;
     }
+    // Une chaine dont un maillon manque donnerait une racine trop basse. Mieux
+    // vaut ne rien ecrire et retenter a la prochaine ouverture.
+    if (!sur) continue;
     ROOTS[start] = {
       root: cur,
       title: known[cur]?.title || known[start]?.title || "",
       cover: known[cur]?.cover || known[start]?.cover || "",
     };
+    resolus++;
   }
-  write(KEYS.roots, ROOTS);
+  writeRoots();
   refreshListRoots();
-  return unknown.length;
+  return resolus;
 }
 
 /* Rassemble les notes, le top et les ajouts par oeuvre. La note gardee est la
@@ -1365,8 +1386,13 @@ $("search-results").addEventListener("click", e => {
 
 /* surcouche de calibrage */
 function renderCalibGrid() {
+  /* POPULAR ne porte qu'une entree par oeuvre, mais l'historique Crunchyroll,
+     lui, porte la saison reellement regardee. Verrouiller sur l'id exact
+     laisserait « Attack on Titan » decochable alors que la Final Season est
+     dans l'historique : le test se fait donc sur la racine.                 */
+  const crRoots = new Set([...CR_IDS].filter(id => !REMOVED.has(id)).map(rootOf));
   $("calib-grid").innerHTML = POPULAR.map(p => {
-    const locked = CR_IDS.has(p.id) && !REMOVED.has(p.id);
+    const locked = crRoots.has(rootOf(p.id));
     const picked = isInList(p.id);
     return `<div class="poster ${locked ? "locked" : (picked ? "picked" : "")}" data-pid="${locked ? "" : p.id}">
       <img src="${esc(p.cover)}" alt="" loading="lazy">
@@ -1439,7 +1465,7 @@ $("backup-restore").onclick = () => {
     // v3 emporte le rattachement des saisons ; sans lui, il se refera tout seul.
     if (data.roots && typeof data.roots === "object") {
       ROOTS = { ...ROOTS, ...data.roots };
-      write(KEYS.roots, ROOTS);
+      writeRoots();
     }
     write(KEYS.rating, RATINGS);
     write(KEYS.added, ADDED);

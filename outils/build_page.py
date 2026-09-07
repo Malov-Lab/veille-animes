@@ -12,6 +12,21 @@ import requests
 sys.stdout.reconfigure(encoding="utf-8")
 
 API = "https://graphql.anilist.co"
+PAGE_URL = "https://malov-lab.github.io/veille-animes/"
+
+# AniList refuse par 403 les requetes sans Origin ni Referer, avec le message
+# « The AniList API has been temporarily disabled due to severe stability
+# issues. » Le message trompe : l'API repond normalement des que la requete se
+# presente comme une page web, ce que le navigateur fait tout seul. Seuls ces
+# scripts avaient besoin d'etre corriges. Le Referer annonce la vraie page
+# appelante, il n'usurpe pas anilist.co.
+HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"),
+    "Origin": "https://malov-lab.github.io",
+    "Referer": PAGE_URL,
+    "Accept": "application/json",
+}
 
 # Titres que la recherche automatique ne retrouve pas : le libelle Crunchyroll
 # est un titre francais ou porte un suffixe de version.
@@ -51,6 +66,13 @@ query ($id: Int) {
 
 # Grille de calibrage : les series les plus connues, celles qu'il a le plus de
 # chances d'avoir deja vues ailleurs que sur Crunchyroll.
+#
+# AniList compte un media par saison : le top 300 brut sort sept vignettes pour
+# « Attack on Titan » et six pour « My Hero Academia ». On ramene chaque saison
+# a son oeuvre avant d'ecrire la grille, avec la meme regle que la page : on ne
+# suit que PREQUEL et seulement vers un format de serie. Les relations arrivent
+# dans la requete existante, ce regroupement ne coute donc aucun appel de plus
+# sur les 300, seulement le rattrapage des racines absentes du lot.
 Q_POPULAR = """
 query ($page: Int) {
   Page(page: $page, perPage: 50) {
@@ -58,21 +80,32 @@ query ($page: Int) {
       id popularity
       title { romaji english }
       coverImage { medium }
+      relations { edges { relationType node { id type format } } }
     }
   }
 }
 """
 
+# Alignes sur la page : voir SERIES_FORMATS et MAX_CHAIN dans page_template.html.
+SERIES_FORMATS = {"TV", "TV_SHORT", "ONA"}
+MAX_CHAIN = 8
+
 
 def gql(query, variables, retries=3):
     for attempt in range(retries):
         try:
-            r = requests.post(API, json={"query": query, "variables": variables}, timeout=25)
+            r = requests.post(API, json={"query": query, "variables": variables},
+                              headers=HEADERS, timeout=25)
             if r.status_code == 429:
                 wait = int(r.headers.get("Retry-After", 60))
                 print(f"    [limite, pause {wait}s]")
                 time.sleep(wait + 1)
                 continue
+            if r.status_code == 403:
+                # Ne pas laisser ce cas se confondre avec une panne : c'est le
+                # filtre anti-script d'AniList, donc HEADERS est en cause.
+                print("    [403 : requete refusee, verifier Origin et Referer]")
+                return None
             r.raise_for_status()
             return r.json().get("data")
         except requests.RequestException as exc:
@@ -145,22 +178,133 @@ def rescue_unmatched(profile, history_summary):
     profile["matched_count"] = len(profile["series"])
 
 
+def _relation_query(ids):
+    """Plusieurs medias en une requete, par alias : meme principe que la page."""
+    parts = "\n".join(
+        f"""r{i}: Media(id: {mid}) {{
+      id popularity
+      title {{ romaji english }}
+      coverImage {{ medium }}
+      relations {{ edges {{ relationType node {{ id type format }} }} }}
+    }}"""
+        for i, mid in enumerate(ids)
+    )
+    return "query { %s }" % parts
+
+
+def _absorb(media, known):
+    """Retient le prequel serie d'un media, ou None s'il ouvre sa chaine."""
+    edges = (media.get("relations") or {}).get("edges", [])
+    prequel = next(
+        (
+            e["node"]["id"]
+            for e in edges
+            if e.get("relationType") == "PREQUEL"
+            and (e.get("node") or {}).get("type") == "ANIME"
+            and (e.get("node") or {}).get("format") in SERIES_FORMATS
+        ),
+        None,
+    )
+    known[media["id"]] = {
+        "prequel": prequel,
+        "title": media["title"].get("english") or media["title"].get("romaji"),
+        "cover": (media.get("coverImage") or {}).get("medium"),
+        "popularity": media.get("popularity") or 0,
+    }
+
+
+def _resolve_roots(known):
+    """Complete `known` jusqu'aux racines, couche par couche.
+
+    La saison 1 d'une oeuvre est presque toujours plus populaire que ses suites
+    et se trouve deja dans le lot, mais pas toujours : ce rattrapage va chercher
+    les racines qui manquent, par paquets de 8 comme le fait le navigateur.
+    """
+    for _ in range(MAX_CHAIN):
+        missing = sorted({
+            k["prequel"] for k in known.values()
+            if k["prequel"] and k["prequel"] not in known
+        })
+        if not missing:
+            return
+        print(f"  rattrapage de {len(missing)} racine(s) hors du lot")
+        for i in range(0, len(missing), 8):
+            chunk = missing[i:i + 8]
+            data = gql(_relation_query(chunk), {}) or {}
+            time.sleep(2.1)
+            for k, mid in enumerate(chunk):
+                media = data.get(f"r{k}")
+                if media:
+                    _absorb(media, known)
+                else:
+                    # Marquer l'echec plutot que de le laisser manquant : sans
+                    # ca, la boucle redemanderait le meme id a chaque couche.
+                    known[mid] = {"prequel": None, "title": None,
+                                  "cover": None, "popularity": 0}
+
+
+def _chain_root(start, known):
+    """Remonte la chaine des prequels. Le garde-fou est le cycle, pas la longueur."""
+    seen = {start}
+    cur = start
+    while True:
+        prequel = (known.get(cur) or {}).get("prequel")
+        if not prequel or prequel in seen:
+            return cur
+        cur = prequel
+        seen.add(cur)
+
+
 def fetch_popular(pages=6):
-    """Les series les plus connues, pour la grille de calibrage 'deja vu'."""
+    """Les oeuvres les plus connues, pour la grille de calibrage 'deja vu'."""
     print(f"\n=== GRILLE DE CALIBRAGE ===")
-    out = []
+    known, order = {}, []
     for page in range(1, pages + 1):
         data = gql(Q_POPULAR, {"page": page})
         time.sleep(2.1)
         if not data:
             break
         for m in data["Page"]["media"]:
-            out.append({
-                "id": m["id"],
-                "title": m["title"].get("english") or m["title"].get("romaji"),
-                "cover": (m.get("coverImage") or {}).get("medium"),
-            })
-        print(f"  page {page} : {len(out)} series cumulees")
+            _absorb(m, known)
+            order.append(m["id"])
+        print(f"  page {page} : {len(order)} saisons cumulees")
+
+    _resolve_roots(known)
+
+    # Une vignette par oeuvre. L'identifiant reste la racine, pour rester
+    # d'accord avec le rootOf de la page, mais le titre et le visuel viennent
+    # du membre le plus populaire de la chaine.
+    #
+    # Sans ca la grille perdrait ses reperes : AniList declare « MONSTERS: 103
+    # Mercies Dragon Damnation », un ONA de 1999, prequel de ONE PIECE, et
+    # « Nekomonogatari Black » prequel de Bakemonogatari. Remonter jusqu'au bout
+    # de la chaine est bon pour regrouper, mauvais pour nommer.
+    groups = collections.defaultdict(list)
+    for mid in known:
+        groups[_chain_root(mid, known)].append(mid)
+
+    wanted = {_chain_root(mid, known) for mid in order}
+    out = []
+    for root, members in groups.items():
+        if root not in wanted:
+            continue  # racine ramenee par le rattrapage d'une autre chaine
+        nommables = [m for m in members if known[m].get("title")]
+        if not nommables:
+            continue
+        face = max(nommables, key=lambda m: known[m]["popularity"])
+        out.append({
+            "id": root,
+            "title": known[face]["title"],
+            "cover": known[face]["cover"],
+            "_pop": known[face]["popularity"],
+        })
+
+    out.sort(key=lambda o: -o["_pop"])
+    for o in out:
+        del o["_pop"]
+
+    print(f"  {len(order)} saisons -> {len(out)} oeuvres "
+          f"({len(order) - len(out)} regroupees)")
     return out
 
 

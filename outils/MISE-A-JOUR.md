@@ -78,6 +78,51 @@ des prequels.
 - Seuls les liens `PREQUEL` vers un format de série (TV, TV court, ONA) sont
   suivis. `PARENT` rattacherait les spin-offs et fusionnerait des œuvres
   distinctes.
+- **Le cache porte un numéro de version** (`ROOTS_VERSION`). Il est mis en cache
+  pour toujours, donc une erreur s'y installait définitivement : une requête
+  perdue était enregistrée comme un verdict « pas de prequel », et la série
+  restait séparée de son œuvre à jamais. Un échec n'est désormais plus écrit, et
+  monter le numéro fait repartir le rattachement à zéro. **À monter à chaque
+  changement de règle de rattachement.**
+- `outils/test_rattachement.js` couvre ces deux points, réseau simulé. Il se
+  lance comme `test_logique.js`, depuis un dossier contenant `anime.html`.
+
+### La grille de calibrage, elle, est regroupée au build
+
+L'écran « j'ai déjà vu » ne passait pas par ce rattachement : il affichait les
+300 séries les plus populaires d'AniList telles quelles, donc **sept vignettes
+pour Attack on Titan et six pour My Hero Academia**. Le rattachement du
+navigateur ne pouvait rien y faire, il ne connaît que les séries de ta liste.
+
+`fetch_popular` remonte donc les chaînes côté Python avant d'écrire la grille,
+avec la même règle. Résultat mesuré : **300 saisons, 215 œuvres**.
+
+- L'identifiant de la vignette reste la racine, pour rester d'accord avec le
+  `rootOf` de la page. Mais **le titre et le visuel viennent du membre le plus
+  populaire de la chaîne**, et c'est indispensable : AniList déclare
+  « MONSTERS: 103 Mercies Dragon Damnation », un ONA de 1999, prequel de
+  ONE PIECE. Nommer par la racine faisait disparaître One Piece de la grille.
+- Le verrouillage d'une vignette se teste sur la racine, sinon
+  « Attack on Titan » resterait décochable alors que la Final Season est dans
+  ton historique.
+- **Cas résiduel connu** : « That Time I Got Reincarnated as a Slime » garde
+  deux vignettes. Sa saison 2 remonte à un OVA, format que la règle ne suit pas.
+  Un cas sur 300, laissé tel quel plutôt que d'élargir la règle aux OVA.
+
+## Le piège du 403 : « API temporarily disabled »
+
+Si un script rend `The AniList API has been temporarily disabled due to severe
+stability issues`, **ce n'est pas une panne**. AniList refuse les requêtes sans
+`Origin` ni `Referer`, c'est-à-dire celles qui ne viennent pas d'un navigateur.
+Le message est trompeur : au même moment, l'API répond normalement au site et à
+la page de veille.
+
+Les deux scripts envoient donc ces en-têtes (`HEADERS` dans `build_page.py` et
+`build_profile.py`), et traitent le 403 par un message explicite. Le `Referer`
+annonce la vraie page appelante, il n'usurpe pas anilist.co.
+
+L'API a par ailleurs de vrais trous : environ une requête sur trois part en
+timeout par moments. Les retries existants absorbent ça.
 
 Conséquence voulue : une suite non vue d'une série que tu suis **n'apparaît plus
 dans « Pour toi »**, puisque ce n'est pas une découverte. Elle remonte en tête de

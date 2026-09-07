@@ -12,6 +12,17 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 API = "https://graphql.anilist.co"
 
+# AniList repond 403 aux requetes sans Origin ni Referer, sous couvert d'une
+# « API temporairement desactivee ». Le message trompe : c'est un filtre contre
+# les scripts, et le navigateur passe sans rien faire. Voir build_page.py.
+HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"),
+    "Origin": "https://malov-lab.github.io",
+    "Referer": "https://malov-lab.github.io/veille-animes/",
+    "Accept": "application/json",
+}
+
 QUERY = """
 query ($s: String) {
   Media(search: $s, type: ANIME) {
@@ -71,13 +82,17 @@ def query_anilist(title, retries=3):
     for attempt in range(retries):
         try:
             resp = requests.post(
-                API, json={"query": QUERY, "variables": {"s": title}}, timeout=25
+                API, json={"query": QUERY, "variables": {"s": title}},
+                headers=HEADERS, timeout=25,
             )
             if resp.status_code == 429:
                 wait = int(resp.headers.get("Retry-After", 60))
                 print(f"    [limite atteinte, pause {wait}s]")
                 time.sleep(wait + 1)
                 continue
+            if resp.status_code == 403:
+                print("    [403 : requete refusee, verifier Origin et Referer]")
+                return None
             resp.raise_for_status()
             return resp.json().get("data", {}).get("Media")
         except requests.RequestException as exc:
