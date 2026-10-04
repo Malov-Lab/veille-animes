@@ -4,10 +4,11 @@
 
 Enchaine : export Crunchyroll, appariement AniList des seules series neuves,
 recommandations et grille, rendu, commit et push. Prevenu par Telegram quand
-ca casse, ce qui arrivera le jour ou le cookie Crunchyroll expirera.
+ca casse. Si Crunchyroll refuse le jeton, le code d'activation part sur
+Telegram et la routine attend la validation avant de continuer.
 
 Lance par la tache planifiee « Veille animes » le dimanche a 19h.
-A la main :  .crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py
+A la main :  .venv/Scripts/python.exe outils/routine_hebdo.py
 Options   :  --dry-run  tout sauf le commit et le push
              --complet  reinterroge AniList pour toutes les series
 """
@@ -22,8 +23,11 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTILS = os.path.join(REPO, "outils")
-EXPORT = os.path.join(REPO, ".crunchyexporter")
-PY_EXPORT = os.path.join(EXPORT, ".venv", "Scripts", "python.exe")
+sys.path.insert(0, OUTILS)
+import crunchyroll                                            # noqa: E402
+
+PY = sys.executable
+TRAVAIL = os.path.join(REPO, ".travail")
 DONNEES = os.path.join(REPO, "donnees-locales")
 LOG = os.path.join(REPO, ".routine.log")
 ENV_TELEGRAM = os.path.join(REPO, ".telegram.env")
@@ -83,27 +87,31 @@ def compter_episodes(chemin):
         return 0
 
 
+def annoncer_code(code, essai, essais):
+    log(f"  code d'activation envoye ({essai}/{essais})")
+    telegram(
+        "<b>Veille animés : Crunchyroll demande une reconnexion</b>\n\n"
+        f"Saisis <code>{code}</code> sur https://www.crunchyroll.com/activate\n"
+        f"Valable 5 minutes, essai {essai} sur {essais}. "
+        "La mise à jour reprend toute seule dès que c'est validé.")
+
+
 def etape_export():
-    """Recupere l'historique Crunchyroll. C'est ici que le cookie expire."""
-    if not os.path.exists(PY_EXPORT):
-        raise RuntimeError(
-            "l'outil d'export est absent, relancer son installation "
-            "(voir outils/MISE-A-JOUR.md)")
-    config = os.path.join(EXPORT, "config.yaml")
-    if not os.path.exists(config):
-        raise RuntimeError("config.yaml absent : le cookie etp_rt n'est pas renseigne")
-
-    data = os.path.join(EXPORT, "data")
-    os.makedirs(data, exist_ok=True)
-    cible = os.path.join(data, "history.json")
+    """Recupere l'historique Crunchyroll, et reconnecte par code si le jeton est refuse."""
+    cible = os.path.join(DONNEES, "history.json")
     avant = compter_episodes(cible)
-
-    lancer([PY_EXPORT, os.path.join("src", "main.py"), "-c", "config.yaml", "fetch"],
-           EXPORT, "l'export Crunchyroll")
+    try:
+        crunchyroll.exporter_historique(cible)
+    except crunchyroll.SessionExpiree as exc:
+        log(f"  {exc} : reconnexion par code")
+        if not crunchyroll.connexion_par_code(annoncer_code):
+            raise RuntimeError("aucun code Crunchyroll n'a ete valide a temps") from exc
+        log("  reconnecte")
+        crunchyroll.exporter_historique(cible)
 
     apres = compter_episodes(cible)
     if apres == 0:
-        raise RuntimeError("l'export a rendu un historique vide, cookie expire ?")
+        raise RuntimeError("l'export a rendu un historique vide")
     # Un historique qui retrecit est un incident, pas une mise a jour.
     if avant and apres < avant * 0.9:
         raise RuntimeError(f"l'historique a fondu, {avant} episodes avant, {apres} apres")
@@ -114,17 +122,17 @@ def etape_export():
 def etape_construction():
     """Appariement, recommandations, grille, rendu. Depuis un dossier de travail
        ou build_page.py trouve ses data/ et son gabarit, comme il s'y attend."""
-    travail = os.path.join(EXPORT)
+    travail = TRAVAIL
     for nom in ("build_profile.py", "build_page.py", "page_template.html"):
         _copier(os.path.join(OUTILS, nom), os.path.join(travail, nom))
-    for nom in ("profile.json", "recos.json", "popular.json"):
+    for nom in ("profile.json", "recos.json", "popular.json", "history.json"):
         src = os.path.join(DONNEES, nom)
         if os.path.exists(src):
             _copier(src, os.path.join(travail, "data", nom))
 
     args = [] if COMPLET else ["--incremental"]
-    lancer([PY_EXPORT, "build_profile.py"] + args, travail, "l'appariement AniList")
-    lancer([PY_EXPORT, "build_page.py"], travail, "la generation de la page")
+    lancer([PY, "build_profile.py"] + args, travail, "l'appariement AniList")
+    lancer([PY, "build_page.py"], travail, "la generation de la page")
 
     # Les donnees regenerees reviennent au depot, la page devient index.html.
     for nom in ("profile.json", "recos.json", "popular.json", "history.json"):
@@ -146,9 +154,9 @@ def _copier(src, dst):
 def etape_verification():
     """Refuse de publier une page cassee. Les tests du depot font foi."""
     for test in ("test_logique.js", "test_rattachement.js"):
-        _copier(os.path.join(OUTILS, test), os.path.join(EXPORT, test))
-    sortie = lancer(["node", "test_logique.js"], EXPORT, "les tests de logique", timeout=300)
-    sortie += lancer(["node", "test_rattachement.js"], EXPORT, "les tests de rattachement", timeout=300)
+        _copier(os.path.join(OUTILS, test), os.path.join(TRAVAIL, test))
+    sortie = lancer(["node", "test_logique.js"], TRAVAIL, "les tests de logique", timeout=300)
+    sortie += lancer(["node", "test_rattachement.js"], TRAVAIL, "les tests de rattachement", timeout=300)
     if "0 echecs" not in sortie:
         raise RuntimeError("des tests ont echoue, la page n'est pas publiee")
 
@@ -183,9 +191,9 @@ def main():
         telegram(
             "<b>Veille animés : la mise à jour a échoué</b>\n\n"
             f"{exc}\n\n"
-            "Si c'est le cookie Crunchyroll : connecte-toi sur crunchyroll.com, "
-            "F12 puis Application, Cookies, copie la valeur de <code>etp_rt</code> "
-            "dans <code>.crunchyexporter/config.yaml</code>.\n\n"
+            "Si c'est la connexion Crunchyroll, depuis le poste, dans le dossier "
+            "de la veille : <code>.venv/Scripts/python.exe outils/crunchyroll.py "
+            "connexion</code>, puis relance la routine.\n\n"
             f"Journal : <code>{LOG}</code>")
         return 1
 

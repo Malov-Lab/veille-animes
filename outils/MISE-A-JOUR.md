@@ -15,15 +15,15 @@ rattrapage si le poste était éteint. Elle enchaîne l'export Crunchyroll,
 l'appariement AniList des seules séries neuves, la régénération, les tests, puis
 le commit et le push. Tu n'as rien à faire.
 
-- **Le cookie `etp_rt` est le point qui cassera.** Quand il expire, la routine
-  s'arrête et **t'envoie un message Telegram** disant quoi faire. Tant qu'il n'est
-  pas renouvelé dans `.crunchyexporter/config.yaml`, la page reste figée.
+- **La connexion à Crunchyroll se renouvelle seule** (voir plus bas). Le jour où
+  Crunchyroll la refuse, la routine **t'envoie un code sur Telegram**, attend que
+  tu le valides, puis continue.
 - Elle refuse de publier une page cassée : `test_logique.js` et
   `test_rattachement.js` doivent passer, sinon rien n'est poussé.
 - Trois garde-fous contre la publication d'un désastre silencieux : un historique
   vide, un historique qui a fondu de plus de 10 %, et un `anime.html`
   anormalement petit interrompent la routine.
-- À la main : `.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py`,
+- À la main : `.venv/Scripts/python.exe outils/routine_hebdo.py`,
   avec `--dry-run` pour tout faire sauf publier, et `--complet` pour réinterroger
   AniList sur toutes les séries au lieu des seules nouveautés.
 - Journal dans `.routine.log`, non versionné.
@@ -31,25 +31,48 @@ le commit et le push. Tu n'as rien à faire.
 Pour ajouter une série tout de suite sans attendre dimanche : onglet « Ma liste »,
 la recherche en haut. Elle compte immédiatement dans les suggestions.
 
-## Relancer la récupération à la main
+## La connexion à Crunchyroll
 
-L'outil d'export est installé à demeure dans `.crunchyexporter/`, avec son venv.
-Il n'y a plus rien à cloner : la routine s'en sert, et toi aussi.
+**Depuis le 2026-10-04, plus de cookie.** Le cookie `etp_rt` expirait sans
+prévenir, et a laissé la page figée du 8 août au 4 octobre. `outils/crunchyroll.py`
+se connecte désormais comme une application TV : un code saisi une fois sur
+crunchyroll.com/activate rend un jeton que la routine renouvelle chaque semaine.
+Aucun mot de passe n'est stocké.
+
+- Le jeton vit dans `.crunchyroll-session.json`, à la racine, **jamais
+  versionné** : il vaut un accès au compte.
+- Crunchyroll ne dit pas combien de temps il vit. Quand il le refuse
+  (`invalid_grant`), la routine envoie un code sur Telegram, jusqu'à trois codes
+  de 5 minutes. Une panne réseau, elle, ne déclenche pas de code : la routine
+  échoue et te prévient.
+- Pour te reconnecter à la main, depuis le poste :
+
+```bash
+.venv/Scripts/python.exe outils/crunchyroll.py connexion
+```
+
+- Pour couper l'accès : sur crunchyroll.com, paramètres du compte, appareils
+  connectés, retirer « Veille animes ».
+
+L'ancien outil d'export (`.crunchyexporter/`) ne sert plus. Le module reprend sa
+lecture de l'historique et le même format de `history.json`. Deux différences
+mesurées : la pagination suit le curseur `next_page` (les numéros de page sont
+refusés au-delà de 10), et chaque version audio d'un épisode a son propre
+identifiant (`…JAJP`, `…FRFR`), donc une même série revue en VF compte deux fois
+dans le total d'épisodes vus, comme avant.
+
+## Relancer la récupération à la main
 
 ```bash
 # Tout, de l'export au push
-.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py
+.venv/Scripts/python.exe outils/routine_hebdo.py
 
 # Tout sauf le commit et le push
-.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py --dry-run
+.venv/Scripts/python.exe outils/routine_hebdo.py --dry-run
 
-# En réinterrogeant AniList sur les 102 séries, et pas seulement les nouvelles
-.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py --complet
+# En réinterrogeant AniList sur toutes les séries, et pas seulement les nouvelles
+.venv/Scripts/python.exe outils/routine_hebdo.py --complet
 ```
-
-Le cookie se renouvelle dans `.crunchyexporter/config.yaml` : crunchyroll.com
-connecté, F12, onglet Application, Cookies, valeur de `etp_rt`. Ce fichier n'est
-jamais versionné, et se déconnecter de Crunchyroll depuis le site l'invalide.
 
 Norton inspecte le HTTPS sur ce poste : le venv embarque `pip-system-certs`,
 sans quoi toutes les requêtes échouent en « certificate verify failed ».
@@ -59,12 +82,12 @@ sans quoi toutes les requêtes échouent en « certificate verify failed ».
 Si seul le gabarit change, sans retaper AniList :
 
 ```bash
-.crunchyexporter/.venv/Scripts/python.exe outils/routine_hebdo.py --dry-run
+.venv/Scripts/python.exe outils/routine_hebdo.py --dry-run
 ```
 
 La routine s'en charge et vérifie les tests au passage. Pour l'appel nu, il
 faut un dossier de travail contenant `data/` et `page_template.html`, ce que
-`routine_hebdo.py` monte pour toi dans `.crunchyexporter/`.
+`routine_hebdo.py` monte pour toi dans `.travail/`.
 
 ## Le regroupement par œuvre
 
@@ -144,7 +167,7 @@ timeout par moments. Les retries existants absorbent ça.
 | Liste des séries, suites, suggestions de départ | `index.html` | oui |
 | Notes, ajouts manuels, séries écartées | stockage local du navigateur | non |
 | Historique Crunchyroll brut | `donnees-locales/` | non |
-| Cookie de session | `.crunchyexporter/config.yaml` | non |
+| Jeton de connexion Crunchyroll | `.crunchyroll-session.json` | non |
 | Jeton Telegram des alertes | `.telegram.env` | non |
 | Journal de la routine | `.routine.log` | non |
 

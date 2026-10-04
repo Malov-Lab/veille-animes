@@ -6,3 +6,5 @@ __pycache__/
 .crunchyexporter/
 .routine.log
 .telegram.env
+.travail/
+.crunchyroll-session.json
